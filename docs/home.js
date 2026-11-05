@@ -71,14 +71,14 @@ export function createHome(root, api) {
   root.innerHTML = `
     <div id="h-main">
       <section class="h-user-wrap" aria-label="Участник и ранги">
-        <a class="h-who" href="#/profile" aria-label="Открыть профиль"><span class="h-avatar" id="h-ava"></span><b id="h-name">—</b><i aria-hidden="true">${ICON.next}</i></a>
+        <a class="h-who" href="#/profile" aria-label="Открыть профиль"><span class="h-avatar sk" id="h-ava"></span><b class="sk" id="h-name">—</b><i aria-hidden="true">${ICON.next}</i></a>
         <ul class="rkslider" id="h-ranks" tabindex="0" aria-label="Ранги"></ul>
         <div class="rkdots" id="h-dots" aria-hidden="true"></div>
       </section>
       <section class="h-balance" aria-label="Баланс">
         <button class="h-tag" id="h-tag" type="button" hidden></button>
         <button class="h-bal" id="h-bal" type="button" aria-label="Открыть Coral Кошелёк">
-          <span class="h-amount" id="h-amount">—</span>
+          <span class="h-amount sk" id="h-amount">—</span>
           <span class="h-caption">Счёт основной<i aria-hidden="true">${ICON.next}</i></span>
         </button>
       </section>
@@ -94,10 +94,10 @@ export function createHome(root, api) {
       <section class="home-metrics metrics" id="tasks" hidden></section>
     </div>
     <div id="h-detail" hidden>
-      <header class="h-dhead"><a class="h-back" href="#/" aria-label="Назад">${ICON.back}</a><h2 id="h-dtitle"></h2></header>
+      <header class="h-dhead"><a class="h-back" href="#/" aria-label="Назад">${ICON.back}<span>Назад</span></a><h2 id="h-dtitle"></h2><span class="h-dside" aria-hidden="true"></span></header>
       <div id="h-wallet" hidden>
         <section class="h-balance" aria-label="Coral Кошелёк">
-          <p class="h-amount" id="w-amount">—</p>
+          <p class="h-amount sk" id="w-amount">—</p>
           <p class="h-caption">Coral Кошелёк</p>
         </section>
         <nav class="h-actions h-actions-4" aria-label="Действия по счёту">
@@ -113,7 +113,7 @@ export function createHome(root, api) {
       <div id="h-profile" hidden></div>
       <div id="h-transfer" hidden>
         <section class="h-balance" aria-label="Трансферный счёт">
-          <p class="h-amount" id="t-amount">—</p>
+          <p class="h-amount sk" id="t-amount">—</p>
           <p class="h-caption">Трансферный счёт</p>
         </section>
         <nav class="h-actions h-actions-one" aria-label="Действия">
@@ -127,6 +127,11 @@ export function createHome(root, api) {
   const $ = (s) => root.querySelector(s);
   const metricsRoot = $("#metrics");
   const tasksRoot = $("#tasks");
+
+  /* ---------- шимер: заглушки на время загрузки ---------- */
+  const skLines = (n = 3) => `<div class="sk-lines" role="status" aria-label="Загрузка">${Array.from({ length: n }, (_, i) => `<i class="sk" style="width:${[92, 74, 58][i % 3]}%"></i>`).join("")}</div>`;
+  const skRows = (n = 3) => `<ul class="sk-rows" role="status" aria-label="Загрузка">${Array.from({ length: n }, () => `<li><i class="sk sk-dot"></i><span><i class="sk" style="width:62%"></i><i class="sk" style="width:38%"></i></span><i class="sk sk-sum"></i></li>`).join("")}</ul>`;
+  const skTiles = (title, n = 4) => `<div class="mtop"><h2 class="mtitle">${title}</h2></div><div class="mgrid" role="status" aria-label="Загрузка">${Array.from({ length: n }, () => `<div class="mcard sk-card"><i class="sk" style="width:70%"></i><i class="sk sk-big"></i><i class="sk" style="width:50%"></i></div>`).join("")}</div>`;
 
   /* ---------- нижний лист ---------- */
   const sheet = $("#sheet");
@@ -162,7 +167,7 @@ export function createHome(root, api) {
   const note = (f, text, kind = "") => {
     const n = f.querySelector(".note");
     n.textContent = text;
-    n.className = `note ${kind}`;
+    n.className = `note ${kind}${!kind && /…$/.test(text) ? " busy" : ""}`;
   };
 
   /* ---------- перевод баллов ---------- */
@@ -258,7 +263,7 @@ export function createHome(root, api) {
   async function sheetInvite() {
     const box = document.createElement("div");
     box.className = "sheet-form";
-    box.textContent = "Готовим вашу ссылку…";
+    box.innerHTML = skLines(2);
     openSheet("Пригласить в клуб", box);
     const r = await api(`${P}/account/ref_link`);
     // API может вернуть пустую ссылку: тогда личная страница участника (так её показывает «Рабочий стол»)
@@ -311,7 +316,7 @@ export function createHome(root, api) {
 
   /** Выплата на карту: проверяем доступность и показываем заявки; саму заявку оформляет страница кабинета (ссылка из API). */
   async function sheetPayout() {
-    const box = textBox(`<p class="muted">Загружаем…</p>`);
+    const box = textBox(skRows(3));
     openSheet("Вывести на карту", box);
     const [avail, list, link] = await Promise.all([
       api(`${P}/personal-new/wallet/assetDistributor/is-available`),
@@ -380,7 +385,7 @@ export function createHome(root, api) {
   function paintProfile() {
     const p = state.profile;
     const root2 = $("#h-profile");
-    if (!p) return void (root2.innerHTML = `<p class="muted">Профиль загружается…</p>`);
+    if (!p) return void (root2.innerHTML = skRows(4));
     const rank = rankLine(p.fullRank || p.rank);
     // порядок кодов — снизу вверх, как в документации API; «максимальный» показываем, только если он выше текущего
     const LADDER = ["5*", "M", "PM", "jA", "A", "D", "SD", "GD", "ED", "DD", "DD+", "E", "SE", "SE1", "GE", "GE1", "PE", "PE1", "PE2", "PE3", "2SE", "StE"];
@@ -403,11 +408,14 @@ export function createHome(root, api) {
   function paint() {
     const p = state.profile;
     $("#h-name").textContent = p ? fio(p) : "—";
+    $("#h-name").classList.toggle("sk", !p);
+    $("#h-ava").classList.toggle("sk", !p);
     $("#h-ava").innerHTML = avatarHtml(p);
     paintProfile();
     paintUser();
     $("#h-amount").textContent = state.balance === null ? "—" : money(state.balance, state.currency);
     $("#w-amount").textContent = $("#h-amount").textContent;
+    for (const id of ["#h-amount", "#w-amount"]) $(id).classList.toggle("sk", state.balance === null && !state.balanceLoaded);
     const tag = $("#h-tag");
     tag.hidden = !state.pointsLoaded;
     if (state.pointsLoaded) {
@@ -453,7 +461,7 @@ export function createHome(root, api) {
     });
   }
   async function loadBonus() {
-    bonusRoot.innerHTML = `<h3>История по счету</h3><p class="muted">Загружаем…</p>`;
+    bonusRoot.innerHTML = `<h3>История по счету</h3>${skRows(4)}`;
     const r = await api(`${P}/personal-new/wallet/baRep?monthReport=${state.bonusMonths}`);
     const items = r.json?.data?.items;
     state.bonus = r.ok && Array.isArray(items) ? { items } : { error: problem(r) };
@@ -466,6 +474,7 @@ export function createHome(root, api) {
   const TRANSFER_TYPES = { TRANSFER_ORDER: "Заказ по трансферу" };
   function paintTransfer() {
     $("#t-amount").textContent = state.points === null ? "—" : points(state.points);
+    $("#t-amount").classList.toggle("sk", state.points === null && !state.pointsLoaded);
     const t = state.transfer;
     if (!t) return;
     if (t.error) {
@@ -489,7 +498,7 @@ export function createHome(root, api) {
     });
   }
   async function loadTransfer() {
-    if (!state.transfer) histRoot.innerHTML = `<h3>История</h3><p class="muted">Загружаем…</p>`;
+    if (!state.transfer) histRoot.innerHTML = `<h3>История</h3>${skRows(3)}`;
     const r = await api(`${P}/personal-new/transfer/reports/branches?displayBalance=true&displayOrders=true`);
     const orders = r.json?.data?.orders;
     state.transfer = r.ok && Array.isArray(orders) ? { orders: [...orders].sort((a, b) => String(b.date).localeCompare(String(a.date)) || Number(b.orderId) - Number(a.orderId)) } : { error: problem(r) };
@@ -592,7 +601,7 @@ export function createHome(root, api) {
     path.forEach((node, i) => {
       const kids = node.children;
       const next = path[i + 1];
-      if (kids === undefined) return void parts.push(`<p class="muted st-empty">Загружаем…</p>`);
+      if (kids === undefined) return void parts.push(skRows(2));
       const label = `<p class="st-label">Подчинённых: ${kids.length}</p>`;
       if (!kids.length) return void parts.push(`${label}<p class="muted st-empty">${node.error ? esc(node.error) : nf ? "Никого нет по выбранным фильтрам." : "У этого участника пока нет подчинённых."}</p>`);
       if (next) {
@@ -720,7 +729,7 @@ export function createHome(root, api) {
 
   async function loadStructure(force = false) {
     if (state.struct && !state.struct.error && !force) return;
-    structRoot.innerHTML = `<section class="h-card"><p class="muted">Загружаем структуру…</p></section>`;
+    structRoot.innerHTML = `<section class="h-card">${skRows(5)}</section>`;
     const [calc, flt] = await Promise.all([api(`${P}/marketing-plans/calculations`), api(`${P}/marketing-plans/calculations/filter`)]);
     const list = calc.json?.data;
     if (!(calc.ok && Array.isArray(list) && list.length)) return loadStructurePRep(`Разметка недоступна (${calc.ok ? "нет расчётов" : problem(calc)}): показан отчёт по структуре без фильтров.`);
@@ -767,7 +776,7 @@ export function createHome(root, api) {
     });
   }
   async function loadOrders() {
-    ordersRoot.innerHTML = `<h3>История заказов</h3><p class="muted">Загружаем…</p>`;
+    ordersRoot.innerHTML = `<h3>История заказов</h3>${skRows(4)}`;
     const r = await api(`${P}/personal-new/shop/orders`);
     const items = r.json?.data;
     state.orders = r.ok && Array.isArray(items) ? { items: [...items].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || Number(b.id) - Number(a.id)) } : { error: problem(r) };
@@ -847,7 +856,7 @@ export function createHome(root, api) {
       side = infoBtn(i);
     } else {
       const p = progressTo(target, f);
-      body = p ? goalHtml(target, p, st === "next" ? "Условия ранга" : undefined) : `<p class="rk-phrase">Цифры за месяц загружаются…</p>`;
+      body = p ? goalHtml(target, p, st === "next" ? "Условия ранга" : undefined) : `<p class="rk-phrase rk-sk"><i class="sk"></i></p>`;
       side = infoBtn(ti);
     }
     return `<li class="rk rk-${r.tone} rk-${st}" title="${esc(r.perk)}: ${esc(r.opens)}"><h2 class="rk-name"><span>${esc(r.name)}</span>${side}</h2>${body}</li>`;
@@ -857,7 +866,7 @@ export function createHome(root, api) {
   function ownCard(f, pre) {
     const code = rankCodes()[0];
     const p = pre ? progressTo(RANKS[0], f) : null;
-    const body = pre ? (p ? goalHtml(RANKS[0], p) : `<p class="rk-phrase">Цифры за месяц загружаются…</p>`) : `<p class="rk-phrase">Ваш ранг</p>`;
+    const body = pre ? (p ? goalHtml(RANKS[0], p) : `<p class="rk-phrase rk-sk"><i class="sk"></i></p>`) : `<p class="rk-phrase">Ваш ранг</p>`;
     return `<li class="rk rk-x rk-now" title="Код ранга из API: ${esc(code ?? "нет")}"><h2 class="rk-name"><span>${code ? esc(rankRu(code)) : "&nbsp;"}</span>${pre ? infoBtn(0) : ""}</h2>${body}</li>`;
   }
 
@@ -1035,6 +1044,13 @@ export function createHome(root, api) {
 
   /** Каждый кусок экрана рисуется, как только пришёл его ответ: один медленный запрос не прячет остальное. */
   async function load() {
+    // пока данные едут, показываем шимер; при повторной загрузке не мигаем уже нарисованным
+    if (!state.metricsJson) metricsRoot.innerHTML = skTiles("МОИ ПОКАЗАТЕЛИ");
+    if (!state.tasks) {
+      tasksRoot.hidden = false;
+      tasksRoot.innerHTML = skTiles("ЗАДАЧИ", 2);
+    }
+    if (!$("#h-ranks").children.length) $("#h-ranks").innerHTML = `<li class="rk rk-load" role="status" aria-label="Загрузка"><h2 class="rk-name"><i class="sk"></i></h2><p class="rk-phrase rk-sk"><i class="sk"></i></p><p class="rk-phrase rk-sk"><i class="sk"></i></p></li>`;
     const acc = await api(`${P}/account`);
     state.profile = acc.json?.data ?? null;
     state.currency = state.profile?.currency || state.currency;
@@ -1042,6 +1058,7 @@ export function createHome(root, api) {
     const chkJob = api(`${P}/account/checking_accounts?currency=${encodeURIComponent(state.currency)}`).then((chk) => {
       const row = Array.isArray(chk.json?.data) ? chk.json.data[0] : chk.json?.data;
       state.balance = chk.ok && row && row.balance !== undefined ? Number(row.balance) : null;
+      state.balanceLoaded = true;
       paint();
       return chk;
     });
@@ -1082,6 +1099,9 @@ export function createHome(root, api) {
     return { chk, mon, met };
   }
 
+  // как в iOS: под закреплённой шапкой появляется тонкая линия, когда контент уходит под неё
+  window.addEventListener("scroll", () => $(".h-dhead").classList.toggle("scrolled", window.scrollY > 4), { passive: true });
+
   /* ---------- переходы: главная ↔ экраны «Движение бонусов» и «История заказов» ---------- */
   function route() {
     const page = { "#/wallet": "bonus", "#/bonus": "bonus", "#/profile": "profile", "#/orders": "orders", "#/transfer": "transfer", "#/structure": "structure" }[location.hash] ?? "";
@@ -1092,7 +1112,7 @@ export function createHome(root, api) {
     $("#h-transfer").hidden = page !== "transfer";
     $("#h-structure").hidden = page !== "structure";
     $("#h-profile").hidden = page !== "profile";
-    $("#h-dtitle").textContent = { orders: "История заказов", structure: "Моя структура", profile: "Профиль" }[page] ?? "";
+    $("#h-dtitle").textContent = { bonus: "Coral Кошелёк", transfer: "Трансферный счёт", orders: "История заказов", structure: "Моя структура", profile: "Профиль" }[page] ?? "";
     if (page === "bonus" && !state.bonus) loadBonus();
     if (page === "orders" && !state.orders) loadOrders();
     if (page === "structure") loadStructure();

@@ -47,7 +47,7 @@ loginForm.addEventListener("submit", async (e) => {
   const f = new FormData(loginForm);
   const btn = $("#login-btn");
   btn.disabled = true;
-  say("Входим…");
+  say("Входим…", "busy");
   try {
     const d = await doLogin({ ...Object.fromEntries(f), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone });
     loginForm.elements.password.value = ""; // пароль не остаётся в форме
@@ -106,7 +106,7 @@ function card(ep) {
 async function load(ep, status, body, pathNode) {
   status.textContent = "…";
   status.className = "chip";
-  body.replaceChildren("Загрузка…");
+  body.replaceChildren(el("div", { className: "sk sk-block", role: "status", ariaLabel: "Загрузка" }));
   const resolved = ep.path.replace("{currency}", encodeURIComponent(ctx.currency));
   if (pathNode) pathNode.textContent = `${ep.method} ${resolved}`;
   const r = await api(resolved, { method: ep.method, body: ep.body ? (typeof ep.body === "string" ? JSON.parse(ep.body) : ep.body) : undefined });

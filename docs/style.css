@@ -266,10 +266,13 @@ body:has(#dash-view:not([hidden])) { background: #f1f3f4; }
 .h-link-ic svg { width: 22px; height: 22px; }
 .h-link-text b { font-size: 1.05rem; font-weight: var(--fw-strong); color: #2b2b2e; }
 .h-link-text span { font-size: .88rem; color: #6b7480; }
-.h-dhead { display: flex; align-items: center; gap: 8px; padding: 4px 0 12px; }
-.h-dhead h2 { margin: 0; font-size: 1.2rem; }
-.h-back { width: 40px; height: 40px; border-radius: 50%; background: #fff; display: grid; place-items: center; color: #2b2b2e; box-shadow: 0 2px 8px rgba(20, 30, 40, .08); }
-.h-back svg { width: 20px; height: 20px; }
+/* Шапка внутренних страниц в духе iOS: «‹ Назад» слева, заголовок по центру, закреплена сверху */
+.h-dhead { position: sticky; top: 0; z-index: 20; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; height: 48px; margin: 0 -16px 8px; padding: 0 8px; background: rgba(241, 243, 244, .88); -webkit-backdrop-filter: saturate(180%) blur(14px); backdrop-filter: saturate(180%) blur(14px); border-bottom: .5px solid transparent; transition: border-color .15s; }
+.h-dhead.scrolled { border-bottom-color: rgba(60, 80, 78, .22); }
+.h-dhead h2 { margin: 0; max-width: 56vw; font-size: 1.06rem; line-height: 1.3rem; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.h-back { justify-self: start; display: inline-flex; align-items: center; gap: 2px; min-height: 44px; padding: 0 8px 0 2px; color: var(--teal); font-size: 1.06rem; text-decoration: none; -webkit-tap-highlight-color: transparent; }
+.h-back svg { width: 24px; height: 24px; flex: none; margin-right: -1px; }
+.h-back:active { opacity: .45; }
 #h-detail .h-card { margin-top: 0; }
 #h-detail .h-card h3 { display: none; }
 #h-detail .h-head { justify-content: flex-end; }
@@ -473,3 +476,40 @@ body:has(#dash-view:not([hidden])) { background: #f1f3f4; }
 .pf-list span { color: var(--muted); flex: none; }
 .pf-list b { font-weight: 500; text-align: right; word-break: break-word; }
 .pf-note { text-align: center; font-size: .8rem; }
+
+/* ---------- шимер: заглушки на время загрузки ---------- */
+@keyframes shimmer { to { background-position: -200% 0; } }
+.sk {
+  display: block; border-radius: 8px; color: transparent !important; user-select: none; pointer-events: none;
+  background: linear-gradient(90deg, #e8eeed 25%, #f6f9f8 50%, #e8eeed 75%) 0 0 / 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+.sk-lines { display: flex; flex-direction: column; gap: 10px; }
+.sk-lines .sk, .sk-rows .sk, .sk-card .sk { height: 12px; }
+.sk-rows { list-style: none; margin: 0; padding: 0; }
+.sk-rows li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid #edf0f2; }
+.sk-rows li:first-child { border-top: 0; }
+.sk-rows li > span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.sk-rows .sk-dot { flex: none; width: 36px; height: 36px; border-radius: 50%; }
+.sk-rows .sk-sum { flex: none; width: 56px; }
+.sk-card { gap: 14px; min-height: 132px; justify-content: center; }
+.sk-card .sk-big { height: 28px; width: 60%; border-radius: 10px; }
+.sk-block { height: 90px; border-radius: 10px; }
+/* крупные цифры, имя и аватар, пока данных нет */
+.h-amount.sk { display: block; width: 10rem; height: 2.4rem; margin: 10px auto 0; border-radius: 14px; }
+.h-who b.sk { display: block; width: 9rem; height: 1rem; }
+.h-avatar.sk { box-shadow: none; border-radius: 50%; }
+/* карточки рангов на тёмном фоне */
+.rk-load { background: #5a6672; }
+.rk .sk { background: linear-gradient(90deg, rgba(255, 255, 255, .16) 25%, rgba(255, 255, 255, .32) 50%, rgba(255, 255, 255, .16) 75%) 0 0 / 200% 100%; animation: shimmer 1.4s linear infinite; }
+.rk-name .sk { width: 55%; height: 1.2rem; }
+.rk-sk .sk { height: 10px; width: 80%; }
+/* статусы «Отправляем…», «Входим…»: бегущий блик по самому тексту */
+.note.busy, .msg.busy {
+  color: transparent; -webkit-background-clip: text; background-clip: text;
+  background-image: linear-gradient(90deg, #7a8a88 30%, #c3cfcd 50%, #7a8a88 70%); background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk, .rk .sk, .note.busy, .msg.busy { animation: none; }
+}
