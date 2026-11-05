@@ -79,7 +79,7 @@ LK_HOST=0.0.0.0 npm start
 
 ## Посредник для GitHub Pages (Cloudflare Worker)
 
-Магазин принимает методы чек-аута только по своей сессии (cookie `PHPSESSID`, `HttpOnly`), а браузер с `github.io` не может её ни получить, ни передать. Проверено: ответ магазина на логин не содержит идентификатор сессии, а заголовок `PHPSESSID` вместо cookie магазин не принимает. Поэтому сессию держит Worker (`worker/worker.mjs`).
+Магазин принимает методы чек-аута только по своей сессии (cookie `PHPSESSID`, `HttpOnly`), а браузер с `github.io` не может её ни получить, ни передать. Проверено: ответ магазина на логин не содержит идентификатор сессии, а заголовок `PHPSESSID` вместо cookie магазин не принимает. Поэтому сессию держит Worker. Его код теперь в монорепозитории `coral-club-shop`: пакет `packages/gateway` (`@coral/gateway`), там же офлайн-тесты и описание. Стенд (`server.mjs`) берёт оттуда проход оплаты: по умолчанию из `../coral-club-shop/packages/gateway/src/`.
 
 **Пароль Worker не нужен.** Сессия участника открывается по токену API кабинета. Проверено на реальной сессии: `GET /web_views/checkout_new` возвращает `{ url, access_token }`; запрос к `url` с заголовком `x-access-token: <access_token>` открывает авторизованную сессию магазина (остальные десять способов передать токен не работают). Корзина участника из API при этом видна в корзине магазина (`/sv-api/order` показывает её `QUANTITY`).
 
@@ -89,7 +89,7 @@ LK_HOST=0.0.0.0 npm start
 - `GET /config` → ключ поиска адреса Google (секрет `GOOGLE_PLACES_KEY`, если задан).
 Запросы принимаются только с адресов из `ALLOWED_ORIGINS`. Сессия живёт час с последнего обращения. Токены, ссылки и значения кук не логируются.
 
-Развернуть (нужен аккаунт Cloudflare, из каталога `worker/`):
+Развернуть (нужен аккаунт Cloudflare, из каталога `coral-club-shop/packages/gateway/`):
 ```bash
 npx wrangler login
 npx wrangler kv namespace create SESSIONS      # выданный id подставьте в wrangler.toml

@@ -33,6 +33,11 @@ const PLACES_KEY =
   "";
 /** По умолчанию только этот компьютер. Для проверки с телефона в той же сети: LK_HOST=0.0.0.0 */
 const BIND = process.env.LK_HOST ?? "127.0.0.1";
+// Код шлюза (проход оплаты до банка) общий со шлюзом на Cloudflare: пакет @coral/gateway в монорепозитории
+// coral-club-shop. По умолчанию он лежит рядом: ../coral-club-shop/packages/gateway/src/ (адрес меняется CORAL_GATEWAY_SRC).
+const GATEWAY_SRC = process.env.CORAL_GATEWAY_SRC
+  ? new URL(`file://${process.env.CORAL_GATEWAY_SRC.replace(/\/?$/, "/")}`).href
+  : new URL("../coral-club-shop/packages/gateway/src/", import.meta.url).href;
 const HOST = CONFIG.upstreamHost;
 /** Пускаем наружу только эти ветки API магазина. */
 const ALLOWED = /^\/restApi\/(proxyCC4|auth|registration)\//;
@@ -226,7 +231,7 @@ async function shopProxy(req, res, sess, url) {
   const rest = url.pathname.replace(/^\/lk\/shop/, "");
   // ссылка оплаты заказа из API кабинета (paymentLink): проходим её до банка и отдаём адрес банка
   if (req.method === "POST" && rest === "/pay") {
-    const { isPaymentLink, resolveFrom } = await import(`./worker/payment.mjs?v=${Date.now()}`);
+    const { isPaymentLink, resolveFrom } = await import(`${GATEWAY_SRC}payment.mjs?v=${Date.now()}`);
     const body = tryJson(await readBody(req));
     const link = body?.link;
     if (!isPaymentLink(link)) return json(res, 400, { error: "Это не ссылка оплаты магазина" });
@@ -239,7 +244,7 @@ async function shopProxy(req, res, sess, url) {
   if (!list.some((re) => re.test(rest))) return json(res, 403, { error: "Этот путь чек-аута стенд не пропускает", path: rest });
   // страница оплаты отвечает редиректом на банк: проходим его здесь и отдаём готовый адрес банка
   if (req.method === "GET" && /^\/order\/payment\//.test(rest)) {
-    const { resolvePayment } = await import(`./worker/payment.mjs?v=${Date.now()}`); // стенд для разработки: правки модуля подхватываются без перезапуска
+    const { resolvePayment } = await import(`${GATEWAY_SRC}payment.mjs?v=${Date.now()}`); // стенд для разработки: правки модуля подхватываются без перезапуска
     const r = await resolvePayment({ jar: sess.jar, origin: `https://${HOST}`, path: rest + url.search });
     console.log(`shop GET ${rest.replace(/\d{5,}/, "<номер>")} → ${r.target ? "адрес банка найден" : "банк не найден"} (${(r.hops ?? []).length} переходов)`);
     return json(res, r.target ? 200 : 502, r.target ? { target: r.target } : { error: r.error, hops: r.hops, page: r.page });

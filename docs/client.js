@@ -97,7 +97,7 @@ export async function request(path, opts = {}) {
  * Чек-аут магазина (/sv-api/*) для собственной страницы оформления. Магазин принимает такие запросы только по своей
  * сессии, поэтому они идут через посредника, у которого эта сессия есть:
  *  - режим «сервер»: стенд (npm start), /lk/shop/...;
- *  - режим «напрямую» (GitHub Pages): Cloudflare Worker из config.json (shopWorker), см. worker/. Он открывает сессию
+ *  - режим «напрямую» (GitHub Pages): Cloudflare Worker из config.json (shopWorker), см. coral-club-shop/packages/gateway. Он открывает сессию
  *    магазина по токену API кабинета, пароль ему не нужен.
  * Без того и другого shopReady() = false, и корзина ведёт на страницу оформления магазина.
  */
