@@ -300,13 +300,6 @@ body:has(#dash-view:not([hidden])) { background: #f1f3f4; }
 .rk-top i { display: grid; place-items: center; color: #fff; }
 .rk-name { margin: 0; font-size: 1.6rem; line-height: 2rem; font-weight: 500; letter-spacing: -.01em; }
 .rk-phrase { margin: 0 0 12px; font-size: .88rem; line-height: 1.2rem; color: rgba(255, 255, 255, .85); }
-.rk-pills { list-style: none; margin: 0 0 12px; padding: 0; display: flex; gap: 6px; }
-.rk-pills li { flex: 1 1 0; min-width: 0; background: rgba(255, 255, 255, .2); border-radius: 14px; padding: 8px 2px; min-height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; text-align: center; }
-.rk-pills span { font-size: .62rem; line-height: .8rem; opacity: .85; }
-.rk-pills b { font-size: .8rem; line-height: 1rem; font-weight: 600; white-space: nowrap; }
-.rk-pills em { font-style: normal; font-size: .6rem; line-height: .8rem; opacity: .8; white-space: nowrap; }
-.rk-pills li.done { background: #fff; color: var(--ink); }
-.rk-pills li.done span { opacity: 1; font-weight: 600; }
 .rk-perk { margin: auto 0 0; font-size: .8rem; color: rgba(255, 255, 255, .7); }
 .rkdots { display: flex; justify-content: center; gap: 6px; margin-top: 10px; }
 .rkdots i { width: 6px; height: 6px; border-radius: 3px; background: #cfd6db; transition: width .2s, background .2s; }
@@ -321,11 +314,6 @@ body:has(#dash-view:not([hidden])) { background: #f1f3f4; }
 .rk-name i { display: grid; place-items: center; font-style: normal; }
 .rk-name i svg { width: 20px; height: 20px; }
 .rk-phrase { margin: 0 0 10px; font-size: .8rem; line-height: 1.05rem; }
-.rk-pills { margin: 0; }
-.rk-pills li { min-height: 46px; padding: 5px 2px; border-radius: 12px; }
-.rk-pills span { font-size: .6rem; line-height: .75rem; }
-.rk-pills b { font-size: .78rem; line-height: .95rem; }
-.rk-pills em { font-size: .56rem; line-height: .7rem; }
 .rk-past .rk-phrase { margin-bottom: 0; }
 
 /* трансферный счёт */
@@ -411,3 +399,25 @@ body:has(#dash-view:not([hidden])) { background: #f1f3f4; }
 .h-user-line { margin-bottom: 2px; }
 .h-close { margin: 0 0 12px; padding: 0 4px; color: var(--muted); font-size: .82rem; }
 .h-close:empty { display: none; }
+
+/* карточки рангов: название, строка цели со шкалой, инфо-кнопка с чек-листом */
+.rk-info { border: 0; background: none; color: #fff; padding: 0; margin: -2px -4px 0 0; width: 32px; height: 32px; display: grid; place-items: center; cursor: pointer; opacity: .9; flex: none; }
+.rk-info:active { opacity: .6; }
+.rk-name > i svg { width: 22px; height: 22px; }
+.rk-goal { margin: 6px 0 8px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: .85rem; line-height: 1.1rem; color: rgba(255, 255, 255, .88); }
+.rk-goal b { font-weight: 600; color: #fff; white-space: nowrap; }
+.rk-bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .28); overflow: hidden; }
+.rk-bar i { display: block; height: 100%; border-radius: 3px; background: #fff; min-width: 4px; }
+.rk-phrase { margin: 6px 0 0; display: flex; align-items: center; gap: 6px; }
+.rk-lock { display: inline-grid; opacity: .85; }
+.rk-lock svg { width: 15px; height: 15px; }
+.rk-past { opacity: .62; }
+.rk-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.rk-list li { display: flex; gap: 12px; align-items: center; }
+.rk-list li div { display: flex; flex-direction: column; }
+.rk-list li b { font-weight: 600; }
+.rk-list li span { color: var(--muted); font-size: .85rem; }
+.rk-list .rk-box { flex: none; width: 24px; height: 24px; border-radius: 8px; border: 2px solid #c3ccd2; display: grid; place-items: center; color: #fff; font-size: .85rem; font-weight: 700; }
+.rk-list li.ok .rk-box { background: #2f9e6b; border-color: #2f9e6b; }
+.rk-goal { font-size: .78rem; gap: 6px; }
+.rk-goal span { min-width: 0; }

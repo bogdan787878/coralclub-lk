@@ -767,61 +767,91 @@ export function createHome(root, api) {
     return null;
   }
 
-  /** Плашка одного условия: что нужно и сколько уже есть. */
-  const pill = (label, need, have, full = label) => {
-    const done = have !== null && have >= need;
-    return `<li class="${done ? "done" : ""}" title="${esc(full)}${done ? " (выполнено)" : ""}"><span>${done ? "✓ " : ""}${esc(label)}</span>${have !== null ? `<b>${fmt(have)}</b><em>из ${fmt(need)}</em>` : `<b>${fmt(need)}</b>`}</li>`;
-  };
+  const INFO = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.8v.1"/></svg>`;
 
-  function rankCard(r, i, cur, f) {
-    const need = [
+  /** Условия ранга: что нужно и сколько есть (h = null, если своих цифр нет). */
+  function rankRows(r, f) {
+    return [
       ["ЛО", r.lo, f?.lo, "Личный объём"],
       ["ГО", r.go, f?.go, "Групповой объём"],
-      r.branches && ["Ветви", r.branches, f?.branches, "Ветви"],
-      r.directors && ["Дир.", r.directors, f?.directors, "Директора"],
+      r.branches && ["Ветви", r.branches, f?.branches, "Директорские ветви"],
+      r.directors && ["Дир.", r.directors, f?.directors, `Директоров в ${r.gens} поколениях`],
       r.sop && [r.sopStar ? "СОП*" : "СОП", r.sop, f?.sop, "Сетевой объём поколений"],
-    ].filter(Boolean);
-    const own = cur !== null && (i === cur || i === cur + 1); // свои цифры показываем только у текущего и следующего
-    const rows = need.map(([k, n, h, t]) => ({ k, n, t, h: own && h !== undefined ? h : null }));
-    const left = rows.filter((x) => x.h !== null && x.h < x.n).length;
+    ]
+      .filter(Boolean)
+      .map(([k, n, h, t]) => ({ k, n, t, h: h === undefined || h === null || Number.isNaN(h) ? null : h }));
+  }
+
+  /** Прогресс к рангу: сколько условий выполнено из скольких. */
+  function progressTo(r, f) {
+    if (!f) return null;
+    const rows = rankRows(r, f);
+    const done = rows.filter((x) => x.h !== null && x.h >= x.n).length;
+    return { rows, done, total: rows.length, pct: Math.round((done / rows.length) * 100) };
+  }
+
+  /** Строка «До «…» 60% • 3 из 5» и шкала. */
+  const goalHtml = (r, p, label = `До «${r.gen}»`) =>
+    `<p class="rk-goal"><span>${esc(label)}</span><b>${p.pct}% • ${p.done} из ${p.total}</b></p><div class="rk-bar" role="progressbar" aria-valuenow="${p.pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${p.pct}%"></i></div>`;
+
+  const infoBtn = (i) => `<button class="rk-info" type="button" data-info="${i}" aria-label="Что нужно сделать">${INFO}</button>`;
+
+  /** Одна карточка ранга. Выполнено у нас только по текущему и следующему рангу: цифры дашборда относятся к ним. */
+  function rankCard(r, i, cur, f) {
     const st = cur === null ? "plain" : i < cur ? "past" : i === cur ? "now" : i === cur + 1 ? "next" : "ahead";
-    const icon = st === "past" ? CHECK : st === "next" || st === "ahead" ? LOCK : "";
-    const phrase =
-      st === "plain"
-        ? "Что нужно для этого ранга"
-        : st === "past"
-          ? "Ранг уже пройден"
-          : st === "ahead"
-            ? `Откроется после ранга «${RANKS[i - 1].name}»`
-            : !f
-              ? "Цифры за месяц загружаются…"
-              : left === 0
-                ? st === "now"
-                  ? "В этом месяце условия выполнены"
-                  : "Все условия по текущим данным выполнены"
-                : st === "now"
-                  ? `В этом месяце выполнено ${rows.length - left} из ${rows.length}`
-                  : `Чтобы открыть, выполнено ${rows.length - left} из ${rows.length}`;
-    const pills = st === "past" ? "" : `<ul class="rk-pills">${rows.map((x) => pill(x.k, x.n, x.h, x.t)).join("")}</ul>`;
-    return `<li class="rk rk-${r.tone} rk-${st}" title="${esc(r.perk)}: ${esc(r.opens)}"><h2 class="rk-name"><span>${esc(r.name)}</span>${icon ? `<i aria-hidden="true">${icon}</i>` : ""}</h2><p class="rk-phrase">${esc(phrase)}</p>${pills}</li>`;
+    const target = st === "now" ? RANKS[i + 1] ?? r : r; // у текущего шкала ведёт к следующему рангу
+    const ti = st === "now" && RANKS[i + 1] ? i + 1 : i;
+    let body = "";
+    let side = "";
+    if (st === "past") {
+      side = `<i aria-hidden="true">${CHECK}</i>`;
+      body = `<p class="rk-phrase">Ранг пройден</p>`;
+    } else if (st === "ahead") {
+      side = infoBtn(i);
+      body = `<p class="rk-phrase"><span class="rk-lock" aria-hidden="true">${LOCK}</span>Откроется после ранга «${esc(RANKS[i - 1].name)}»</p>`;
+    } else if (st === "plain") {
+      side = infoBtn(i);
+      body = `<p class="rk-phrase">Что нужно для этого ранга</p>`;
+    } else if (st === "now" && !RANKS[i + 1]) {
+      body = `<p class="rk-phrase">Высший ранг в таблице условий</p>`;
+      side = infoBtn(i);
+    } else {
+      const p = progressTo(target, f);
+      body = p ? goalHtml(target, p, st === "next" ? "Условия ранга" : undefined) : `<p class="rk-phrase">Цифры за месяц загружаются…</p>`;
+      side = infoBtn(ti);
+    }
+    return `<li class="rk rk-${r.tone} rk-${st}" title="${esc(r.perk)}: ${esc(r.opens)}"><h2 class="rk-name"><span>${esc(r.name)}</span>${side}</h2>${body}</li>`;
   }
 
   /** Карточка текущего ранга, когда его нет в таблице условий (ниже директора или код неизвестен). */
-  function ownCard(d, pre) {
+  function ownCard(f, pre) {
     const code = rankCodes()[0];
-    const crit = d
-      ? [
-          ["ЛО", numOf(d.volumePersonal), numOf(d.volumePersonalPlan)],
-          ["ГО", numOf(d.volumeGroup), numOf(d.volumeGroupPlan)],
-          ["Ветви", numOf(d.directorBranchesCount), 0],
-          ["Дир.", numOf(d.generationDirectorsCount), 0],
-          ["СОП", numOf(d.volumeQualifyingStar), numOf(d.volumeQualifyingStarPlan)],
-        ]
-          .map(([k, v, plan]) => (plan > 0 ? pill(k, plan, v) : `<li><span>${esc(k)}</span><b>${fmt(v)}</b></li>`))
-          .join("")
-      : "";
-    return `<li class="rk rk-x rk-now" title="Код ранга из API: ${esc(code ?? "нет")}"><h2 class="rk-name"><span>${code ? esc(rankRu(code)) : "&nbsp;"}</span></h2><p class="rk-phrase">${pre ? "Ваш ранг, ниже директора" : "Ваш ранг"}</p>${crit ? `<ul class="rk-pills">${crit}</ul>` : ""}</li>`;
+    const p = pre ? progressTo(RANKS[0], f) : null;
+    const body = pre ? (p ? goalHtml(RANKS[0], p) : `<p class="rk-phrase">Цифры за месяц загружаются…</p>`) : `<p class="rk-phrase">Ваш ранг</p>`;
+    return `<li class="rk rk-x rk-now" title="Код ранга из API: ${esc(code ?? "нет")}"><h2 class="rk-name"><span>${code ? esc(rankRu(code)) : "&nbsp;"}</span>${pre ? infoBtn(0) : ""}</h2>${body}</li>`;
   }
+
+  /** Окно «Что нужно сделать»: чек-лист условий ранга. */
+  function sheetRank(i) {
+    const r = RANKS[i];
+    const cur = rankIndexNow();
+    const f = state.dash ? { lo: numOf(state.dash.volumePersonal), go: numOf(state.dash.volumeGroup), branches: numOf(state.dash.directorBranchesCount), directors: numOf(state.dash.generationDirectorsCount), sop: numOf(state.dash.volumeQualifyingStar) } : null;
+    const mine = cur === null ? i === 0 : i === cur || i === cur + 1 || (cur === -1 && i === 0);
+    const rows = rankRows(r, mine ? f : null);
+    const box = document.createElement("div");
+    box.className = "sheet-form";
+    box.innerHTML = `<ul class="rk-list">${rows
+      .map((x) => {
+        const ok = x.h !== null && x.h >= x.n;
+        return `<li class="${ok ? "ok" : ""}"><span class="rk-box" aria-hidden="true">${ok ? "✓" : ""}</span><div><b>${esc(x.t)}</b><span>${x.h !== null ? `${fmt(x.h)} из ${fmt(x.n)}` : `нужно ${fmt(x.n)}`}</span></div></li>`;
+      })
+      .join("")}</ul><p class="muted">Условия считаются за ${count(r.months, ["месяц", "месяца", "месяцев"])} подряд. ${esc(r.opens)}.</p>`;
+    openSheet(`До «${r.gen}»`, box);
+  }
+  $("#h-ranks").addEventListener("click", (e) => {
+    const b = e.target.closest(".rk-info");
+    if (b) sheetRank(Number(b.dataset.info));
+  });
 
   function paintUser() {
     const list = $("#h-ranks");
@@ -834,7 +864,7 @@ export function createHome(root, api) {
     const key = `${cur}|${rankCodes()[0]}`;
     const firstTime = state.rkKey !== key;
     const hasOwn = cur === null || cur < 0;
-    list.innerHTML = (hasOwn ? ownCard(d, cur === -1) : "") + RANKS.map((r, i) => rankCard(r, i, cur, f)).join("");
+    list.innerHTML = (hasOwn ? ownCard(f, cur === -1) : "") + RANKS.map((r, i) => rankCard(r, i, cur, f)).join("");
     const items = [...list.children];
     dots.innerHTML = items.map(() => "<i></i>").join("");
     const mark = () => {
