@@ -1,0 +1,48 @@
+{
+  "upstreamHost": "coralclub.ru",
+  "applicationToken": "1ec82603-8332-6dd2-9af6-4309c012a93e",
+  "deliveryId": "RU",
+  "language": "ru",
+  "sessionPath": "/restApi/proxyCC4/auth/session",
+  "endpoints": [
+    {
+      "id": "account",
+      "title": "Аккаунт",
+      "method": "GET",
+      "path": "/restApi/proxyCC4/account",
+      "note": "GET /api/v1/account: профиль участника (в ответе валюта и должность)."
+    },
+    {
+      "id": "checking",
+      "title": "Текущий счет",
+      "method": "GET",
+      "path": "/restApi/proxyCC4/account/checking_accounts?currency={currency}",
+      "after": "account",
+      "bindAs": "accounts",
+      "note": "GET /api/v1/account/checking_accounts: баланс счёта в валюте участника. Это виджет «Текущий счет» на рабочем столе."
+    },
+    {
+      "id": "bonus",
+      "title": "Бонусы",
+      "method": "GET",
+      "path": "/restApi/proxyCC4/account/bonus?currency={currency}",
+      "after": "account",
+      "note": "GET /api/v1/account/bonus: бонусный баланс по валютам."
+    },
+    {
+      "id": "metrics",
+      "title": "Мои показатели",
+      "method": "GET",
+      "path": "/restApi/proxyCC4/account/metrics",
+      "note": "GET /api/v1/account/metrics: данные страницы «Мои показатели». Закрытый ранг: volumeQualifyingStar[].rank и maxCloseRank по месяцам; география: countries[]; СОП/СОП*: volumeQualifying и volumeQualifyingStar; групповой объём: volumeGroup; бонусы: bonus. Только для дистрибьюторов.",
+      "bindAs": "metrics"
+    },
+    {
+      "id": "dashboard",
+      "title": "Дашборд (объёмы)",
+      "method": "GET",
+      "path": "/restApi/proxyCC4/account/dashboard",
+      "note": "GET /api/v1/account/dashboard: личный и групповой объём, СОП, ветки, история по месяцам."
+    }
+  ]
+}

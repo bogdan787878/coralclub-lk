@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ЛК Coral Club · тестовый стенд</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- вход -->
+  <main id="login-view" class="center">
+    <form id="login-form" class="card login" autocomplete="off">
+      <p class="eyebrow">Тестовый стенд · изолирован</p>
+      <h1>Вход в личный кабинет</h1>
+      <p class="muted">Логин и пароль уходят только в магазин, на этом стенде не сохраняются.</p>
+      <label>Логин
+        <input name="login" autocomplete="username" required />
+      </label>
+      <label>Пароль
+        <input name="password" type="password" autocomplete="current-password" required />
+      </label>
+      <div class="row">
+        <label>Страна
+          <input name="deliveryId" value="RU" maxlength="2" />
+        </label>
+        <label>Язык
+          <input name="language" value="ru" maxlength="2" />
+        </label>
+      </div>
+      <button class="btn" type="submit" id="login-btn">Войти</button>
+      <p id="login-msg" class="msg" role="status"></p>
+    </form>
+  </main>
+
+  <!-- главная -->
+  <div id="dash-view" hidden>
+
+    <main class="home" id="home"></main>
+
+    <details class="api-details">
+      <summary>Отладка: запросы к API</summary>
+      <section class="wrap">
+        <p><button class="btn ghost small" id="logout-btn" type="button">Выйти из кабинета</button></p>
+        <div class="tools card">
+          <div>
+            <h2>Свой запрос</h2>
+            <form id="custom-form" class="row tight">
+              <select name="method"><option>GET</option><option>POST</option></select>
+              <input name="path" placeholder="/restApi/proxyCC4/…" required />
+              <button class="btn small" type="submit">Отправить</button>
+            </form>
+            <textarea name="body" id="custom-body" rows="2" placeholder="Тело для POST, JSON (необязательно)"></textarea>
+          </div>
+        </div>
+        <div id="results" class="results"></div>
+      </section>
+    </details>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

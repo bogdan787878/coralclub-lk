@@ -1,0 +1,13 @@
+{
+  "name": "coral-club-lk-test",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Изолированный стенд: вход в личный кабинет Coral Club и страница с данными из API. Не связан с другими проектами.",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

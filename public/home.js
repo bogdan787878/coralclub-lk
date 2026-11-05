@@ -1,0 +1,688 @@
+// Главная в духе банковского приложения: основной счёт, трансферный счёт тегом,
+// быстрые действия и виджеты показателей. Данные из API кабинета (CC4).
+import { metricsMessage, rankRu, renderMetrics } from "./metrics.js";
+import { PRE, RANKS } from "./ranks.js";
+
+const P = "/restApi/proxyCC4";
+const tz = String(new Date().getTimezoneOffset()); // как просит API: минуты смещения, например -180
+
+const ICON = {
+  crown: `<svg viewBox="0 0 48 40" fill="currentColor"><path d="M6 12l9 9 9-15 9 15 9-9-4 22H10L6 12z"/></svg>`,
+  points: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>`,
+  bonus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M9 12.5l2 2 4-5"/></svg>`,
+  invite: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="8" r="3.5"/><path d="M3.5 20c.7-3.6 3.2-5.5 6.5-5.5s5.8 1.9 6.5 5.5M19 8v6M16 11h6"/></svg>`,
+  down: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>`,
+  up: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>`,
+  coin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5c0-1 1-1.6 2.5-1.6s2.5.6 2.5 1.6-1 1.4-2.5 1.6-2.5.6-2.5 1.6 1 1.6 2.5 1.6 2.5-.6 2.5-1.6"/></svg>`,
+  bag: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1 12H6L5 8zM9 8a3 3 0 016 0"/></svg>`,
+  truck: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h11v10H3zM14 10h4l3 3v3h-7"/><circle cx="7.5" cy="17.5" r="1.8"/><circle cx="17.5" cy="17.5" r="1.8"/></svg>`,
+  tick: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>`,
+  team: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c.6-3.2 3-4.8 6-4.8s5.4 1.6 6 4.8"/><circle cx="17.5" cy="9" r="2.4"/><path d="M17 14.3c2.2.1 3.7 1.4 4.2 3.7"/></svg>`,
+  back: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>`,
+  close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>`,
+};
+
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const money = (amount, currency) => {
+  try {
+    return new Intl.NumberFormat("ru-RU", { style: "currency", currency, currencyDisplay: "narrowSymbol" }).format(amount);
+  } catch {
+    return `${amount.toLocaleString("ru-RU", { minimumFractionDigits: 2 })} ${currency}`;
+  }
+};
+const plural = (n, [one, few, many]) => {
+  const a = Math.abs(n) % 100;
+  const b = a % 10;
+  return a > 10 && a < 20 ? many : b === 1 ? one : b >= 2 && b <= 4 ? few : many;
+};
+// дробное число по-русски: «36,4 балла»
+const points = (n) => `${n.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ${Number.isInteger(n) ? plural(n, ["балл", "балла", "баллов"]) : "балла"}`;
+/** Месяц трансфера приходит как «ГГММ» (2611 = ноябрь 2026). */
+const MONTHS_RU = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
+const monthLabel = (m) => {
+  const s = String(m);
+  return /^\d{4}$/.test(s) ? `${MONTHS_RU[Number(s.slice(2)) - 1] ?? s.slice(2)} 20${s.slice(0, 2)}` : s;
+};
+const dmy = (iso) => (/^\d{4}-\d{2}-\d{2}/.test(String(iso)) ? `${String(iso).slice(8, 10)}.${String(iso).slice(5, 7)}.${String(iso).slice(0, 4)}` : String(iso ?? ""));
+const STATUS = { PAID: ["Оплачен", "ok"], UNPAID: ["Не оплачен", "wait"], CANCELED: ["Отменён", "bad"], CANCELLED: ["Отменён", "bad"], PARTIALLY_PAID: ["Оплачен частично", "wait"] };
+const count = (n, forms) => `${n} ${plural(n, forms)}`;
+/** «TEST TEST» → «Test Test»: имена, написанные заглавными, приводим к обычному виду. */
+const titleCase = (s) => (s && s === s.toUpperCase() ? s.toLowerCase().replace(/(^|[\s-])(\S)/g, (_, a, b) => a + b.toUpperCase()) : s);
+const initials = (p) => [p?.name, p?.surname].filter(Boolean).map((x) => x[0]).join("").toUpperCase() || "•";
+
+/** Сообщение об ошибке из ответа API. */
+function problem(r) {
+  const j = r.json;
+  if (j?.errors && typeof j.errors === "object") return Object.values(j.errors).flat().join(" ");
+  return j?.message || (r.status === 401 ? "Нужно войти заново" : r.status === 403 ? "Нет доступа" : `Ошибка ${r.status || "сети"}`);
+}
+
+export function createHome(root, api) {
+  const state = { profile: null, currency: "RUB", balance: null, points: null, pointsLoaded: false, months: [], orders: null, bonus: null, bonusMonths: 6, bonusShown: 8, ordersShown: 5, dash: null, member: null, metricsJson: null, transfer: null, transferShown: 8, struct: null, path: [] };
+
+  root.innerHTML = `
+    <div id="h-main">
+      <section class="h-user-wrap" aria-label="Участник и ранги">
+        <p class="h-user-line"><b id="h-name">—</b><span id="h-id"></span></p>
+        <ul class="rkslider" id="h-ranks" tabindex="0" aria-label="Ранги"></ul>
+        <div class="rkdots" id="h-dots" aria-hidden="true"></div>
+      </section>
+      <section class="h-balance" aria-label="Баланс">
+        <button class="h-tag" id="h-tag" type="button" hidden></button>
+        <p class="h-amount" id="h-amount">—</p>
+        <p class="h-caption">Счёт основной</p>
+      </section>
+      <nav class="h-actions" aria-label="Быстрые действия">
+        <button class="h-act" data-act="points" type="button"><span>${ICON.points}</span>Перевод баллов</button>
+        <button class="h-act" data-act="bonus" type="button"><span>${ICON.bonus}</span>Перевод бонусов</button>
+        <button class="h-act" data-act="invite" type="button"><span>${ICON.invite}</span>Пригласить в клуб</button>
+      </nav>
+      <a class="h-link" href="#/bonus"><span class="h-link-ic" aria-hidden="true">${ICON.coin}</span><span class="h-link-text"><b>Движение бонусов</b><span>Приход и расход бонусов</span></span></a>
+      <a class="h-link" href="#/orders"><span class="h-link-ic" aria-hidden="true">${ICON.bag}</span><span class="h-link-text"><b>История заказов</b><span>Все заказы и их статусы</span></span></a>
+      <a class="h-link" href="#/structure"><span class="h-link-ic" aria-hidden="true">${ICON.team}</span><span class="h-link-text"><b>Моя структура</b><span>Кто в вашей команде</span></span></a>
+      <section class="home-metrics metrics" id="metrics"></section>
+    </div>
+    <div id="h-detail" hidden>
+      <header class="h-dhead"><a class="h-back" href="#/" aria-label="Назад">${ICON.back}</a><h2 id="h-dtitle"></h2></header>
+      <section class="h-card" id="h-bonus" hidden aria-label="Движение бонусов"></section>
+      <section class="h-card" id="h-orders" hidden aria-label="История заказов"></section>
+      <div id="h-structure" hidden></div>
+      <div id="h-transfer" hidden>
+        <section class="h-balance" aria-label="Трансферный счёт">
+          <p class="h-amount" id="t-amount">—</p>
+          <p class="h-caption">Трансферный счёт</p>
+        </section>
+        <nav class="h-actions h-actions-one" aria-label="Действия">
+          <button class="h-act" data-act="points" type="button"><span>${ICON.points}</span>Перевод баллов</button>
+        </nav>
+        <section class="h-card" id="t-hist" aria-label="История"></section>
+      </div>
+    </div>
+    <div class="sheet-wrap" id="sheet" hidden></div>`;
+
+  const $ = (s) => root.querySelector(s);
+  const metricsRoot = $("#metrics");
+
+  /* ---------- нижний лист ---------- */
+  const sheet = $("#sheet");
+  function openSheet(title, node) {
+    sheet.replaceChildren();
+    const back = document.createElement("div");
+    back.className = "sheet-back";
+    back.onclick = closeSheet;
+    const box = document.createElement("div");
+    box.className = "sheet";
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-label", title);
+    const head = document.createElement("div");
+    head.className = "sheet-head";
+    head.innerHTML = `<h2>${esc(title)}</h2><button class="sheet-x" type="button" aria-label="Закрыть">${ICON.close}</button>`;
+    head.querySelector("button").onclick = closeSheet;
+    box.append(head, node);
+    sheet.append(back, box);
+    sheet.hidden = false;
+  }
+  function closeSheet() {
+    sheet.hidden = true;
+    sheet.replaceChildren();
+  }
+  document.addEventListener("keydown", (e) => e.key === "Escape" && closeSheet());
+
+  const form = (html) => {
+    const f = document.createElement("form");
+    f.className = "sheet-form";
+    f.innerHTML = html;
+    return f;
+  };
+  const note = (f, text, kind = "") => {
+    const n = f.querySelector(".note");
+    n.textContent = text;
+    n.className = `note ${kind}`;
+  };
+
+  /* ---------- перевод баллов ---------- */
+  function sheetPoints() {
+    const months = state.months.filter((m) => Number(m.balanceMonth) > 0);
+    if (!months.length) return openSheet("Перевод баллов", Object.assign(document.createElement("p"), { className: "sheet-empty", textContent: "На трансферном счёте нет баллов для перевода." }));
+    const f = form(`
+      <label>Месяц
+        <select name="month">${months.map((m) => `<option value="${esc(m.month)}">${esc(monthLabel(m.month))}: ${esc(points(Number(m.balanceMonth)))}</option>`).join("")}</select>
+      </label>
+      <label>Coral ID получателя
+        <span class="inline"><input name="member" inputmode="numeric" pattern="[0-9]*" required /><button class="btn small ghost" type="button" id="check">Проверить</button></span>
+      </label>
+      <div class="person" hidden></div>
+      <label>Сколько баллов
+        <input name="amount" inputmode="decimal" required />
+      </label>
+      <button class="btn" type="submit" id="go">Перевести</button>
+      <p class="note" role="status"></p>`);
+    let person = null;
+    const personBox = f.querySelector(".person");
+    const check = async () => {
+      const month = f.elements.month.value;
+      const id = f.elements.member.value.trim();
+      if (!id) return note(f, "Введите Coral ID", "bad");
+      note(f, "Проверяем…");
+      const r = await api(`${P}/personal-new/transfer/check-person?month=${encodeURIComponent(month)}&memberId=${encodeURIComponent(id)}&timeZone=${encodeURIComponent(tz)}`);
+      const d = r.json?.data;
+      if (!r.ok || !d) {
+        person = null;
+        personBox.hidden = true;
+        return note(f, problem(r), "bad");
+      }
+      person = d.recipient ? d : null;
+      personBox.hidden = false;
+      personBox.innerHTML = `${d.avatar ? `<img src="${esc(d.avatar)}" alt="" />` : `<span class="h-avatar">${esc(initials(d))}</span>`}<div><b>${esc([d.surname, d.name].filter(Boolean).join(" "))}</b><span>${d.recipient ? "Может получить перевод" : "Не может получить перевод"}</span></div>`;
+      note(f, d.recipient ? "" : "Этому участнику перевести нельзя", d.recipient ? "" : "bad");
+    };
+    f.querySelector("#check").onclick = check;
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      if (!person) await check();
+      if (!person) return;
+      const amount = Number(String(f.elements.amount.value).replace(",", "."));
+      const month = f.elements.month.value;
+      const have = Number(months.find((m) => String(m.month) === month)?.balanceMonth ?? 0);
+      if (!(amount > 0) || amount > have) return note(f, `Сумма от 0 до ${points(have)}`, "bad");
+      if (!confirm(`Перевести ${points(amount)} участнику ${person.surname ?? ""} ${person.name ?? ""} (${person.id})?`)) return;
+      f.querySelector("#go").disabled = true;
+      note(f, "Отправляем…");
+      const r = await api(`${P}/personal-new/transfer/create`, { method: "POST", body: { month: Number(month) || month, timeZone: tz, members: [{ member: Number(person.id), amount }] } });
+      f.querySelector("#go").disabled = false;
+      if (r.ok && r.json?.success !== false) {
+        note(f, "Перевод выполнен", "ok");
+        load();
+        loadTransfer();
+      } else note(f, problem(r), "bad");
+    };
+    openSheet("Перевод баллов", f);
+  }
+
+  /* ---------- перевод бонусов ---------- */
+  function sheetBonus() {
+    const f = form(`
+      <p class="muted">Доступно: <b>${state.balance === null ? "—" : esc(money(state.balance, state.currency))}</b></p>
+      <label>Coral ID получателя
+        <input name="recipient" inputmode="numeric" pattern="[0-9]*" required />
+      </label>
+      <label>Сумма, ${esc(state.currency)}
+        <input name="amount" inputmode="decimal" required />
+      </label>
+      <button class="btn" type="submit" id="go">Перевести</button>
+      <p class="note" role="status"></p>`);
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      const amount = Number(String(f.elements.amount.value).replace(",", "."));
+      const recipientId = Number(f.elements.recipient.value);
+      if (!(amount > 0) || (state.balance !== null && amount > state.balance)) return note(f, "Сумма больше нуля и не больше доступной", "bad");
+      if (!confirm(`Перевести ${money(amount, state.currency)} участнику ${recipientId}?`)) return;
+      f.querySelector("#go").disabled = true;
+      note(f, "Отправляем…");
+      const r = await api(`${P}/personal-new/transfer/bonus`, { method: "POST", body: { recipientId, amount, currency: state.currency } });
+      f.querySelector("#go").disabled = false;
+      if (r.ok && r.json?.success !== false) {
+        note(f, "Перевод выполнен", "ok");
+        load();
+      } else note(f, problem(r), "bad");
+    };
+    openSheet("Перевод бонусов", f);
+  }
+
+  /* ---------- пригласить в клуб ---------- */
+  async function sheetInvite() {
+    const box = document.createElement("div");
+    box.className = "sheet-form";
+    box.textContent = "Готовим вашу ссылку…";
+    openSheet("Пригласить в клуб", box);
+    const r = await api(`${P}/account/ref_link`);
+    // API может вернуть пустую ссылку: тогда личная страница участника (так её показывает «Рабочий стол»)
+    const apiLink = r.json?.data?.link;
+    const fallback = state.profile?.id ? `https://coral.club/${state.profile.id}.html` : "";
+    const link = apiLink || fallback;
+    if (!link) {
+      box.textContent = r.ok ? "Ссылка для этого аккаунта пока не выдана." : problem(r);
+      return;
+    }
+    box.innerHTML = `<p class="muted">${apiLink ? "Ваша личная ссылка: по ней человек регистрируется в клубе под вами." : "Ваша личная страница в клубе. Именной реферальной ссылки в API для этого аккаунта нет."}</p><input class="linkbox" readonly value="${esc(link)}" aria-label="Реферальная ссылка" /><div class="row2"><button class="btn" type="button" id="copy">Скопировать</button><button class="btn ghost" type="button" id="share" hidden>Поделиться</button></div><p class="note" role="status"></p>`;
+    const nt = box.querySelector(".note");
+    box.querySelector("#copy").onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(link);
+        nt.textContent = "Ссылка скопирована";
+        nt.className = "note ok";
+      } catch {
+        box.querySelector(".linkbox").select();
+        nt.textContent = "Выделил ссылку: скопируйте вручную";
+      }
+    };
+    if (navigator.share) {
+      const s = box.querySelector("#share");
+      s.hidden = false;
+      s.onclick = () => navigator.share({ title: "Приглашение в клуб", url: link }).catch(() => {});
+    }
+  }
+
+  root.querySelectorAll(".h-act").forEach((b) => {
+    b.onclick = () => ({ points: sheetPoints, bonus: sheetBonus, invite: sheetInvite })[b.dataset.act]();
+  });
+
+  $("#h-tag").onclick = () => {
+    location.hash = "#/transfer";
+  };
+
+  /* ---------- данные ---------- */
+  function paint() {
+    const p = state.profile;
+    $("#h-name").textContent = p ? titleCase([p.name, p.surname].filter(Boolean).join(" ")) || "Участник" : "—";
+    $("#h-id").textContent = p?.id ? `Coral ID ${p.id}` : "";
+    paintUser();
+    $("#h-amount").textContent = state.balance === null ? "—" : money(state.balance, state.currency);
+    const tag = $("#h-tag");
+    tag.hidden = !state.pointsLoaded;
+    if (state.pointsLoaded) {
+      tag.innerHTML = `${ICON.crown}<span>Трансферный счёт · ${state.points === null ? "нет данных" : esc(points(state.points))}</span>`;
+      tag.title = state.points === null ? "Метод трансферного счёта не вернул баллы" : "Баллы трансферного счёта за текущий месяц";
+    }
+    paintTransfer();
+  }
+
+  /* ---------- движение бонусов ---------- */
+  const bonusRoot = $("#h-bonus");
+  function paintBonus() {
+    if (!state.bonus) return;
+    if (state.bonus.error) {
+      bonusRoot.innerHTML = `<h3>Движение бонусов</h3><p class="muted">${esc(state.bonus.error)}</p>`;
+      return;
+    }
+    const all = state.bonus.items.filter((i) => !i.currency || i.currency === state.currency);
+    const income = all.reduce((a, i) => a + Number(i.income ?? 0), 0);
+    const expense = all.reduce((a, i) => a + Number(i.expense ?? 0), 0);
+    const rows = all.slice(0, state.bonusShown).map((i) => {
+      const inc = i.income !== null && i.income !== undefined && Number(i.income) !== 0;
+      const sum = inc ? Number(i.income) : Number(i.expense ?? 0);
+      const sub = [dmy(i.date), i.comment || i.eventId || ""].filter(Boolean).join(" · ");
+      return `<li class="h-row"><span class="h-ico ${inc ? "in" : "out"}">${inc ? "↓" : "↑"}</span><div class="h-main"><b>${esc(i.typeName || "Операция")}</b><span>${esc(sub)}</span></div><span class="h-sum ${inc ? "in" : ""}">${inc ? "+" : "−"}${esc(money(sum, i.currency || state.currency))}</span></li>`;
+    });
+    bonusRoot.innerHTML = `
+      <div class="h-head"><h3>Движение бонусов</h3>
+        <div class="seg" role="group" aria-label="Период">${[1, 3, 6].map((n) => `<button type="button" data-m="${n}" class="${n === state.bonusMonths ? "on" : ""}">${n} мес.</button>`).join("")}</div></div>
+      <div class="h-stats"><div><span>Приход</span><b class="in">+${esc(money(income, state.currency))}</b></div><div><span>Расход</span><b>−${esc(money(expense, state.currency))}</b></div></div>
+      ${rows.length ? `<ul class="h-list">${rows.join("")}</ul>` : `<p class="muted">Операций за период нет.</p>`}
+      ${all.length > state.bonusShown ? `<button class="h-more" type="button" id="bonus-more">Показать ещё</button>` : ""}`;
+    bonusRoot.querySelectorAll(".seg button").forEach((b) => {
+      b.onclick = () => {
+        state.bonusMonths = Number(b.dataset.m);
+        state.bonusShown = 8;
+        loadBonus();
+      };
+    });
+    bonusRoot.querySelector("#bonus-more")?.addEventListener("click", () => {
+      state.bonusShown += 20;
+      paintBonus();
+    });
+  }
+  async function loadBonus() {
+    bonusRoot.innerHTML = `<h3>Движение бонусов</h3><p class="muted">Загружаем…</p>`;
+    const r = await api(`${P}/personal-new/wallet/baRep?monthReport=${state.bonusMonths}`);
+    const items = r.json?.data?.items;
+    state.bonus = r.ok && Array.isArray(items) ? { items } : { error: problem(r) };
+    paintBonus();
+    return r;
+  }
+
+  /* ---------- трансферный счёт: баланс, перевод баллов, история ---------- */
+  const histRoot = $("#t-hist");
+  const TRANSFER_TYPES = { TRANSFER_ORDER: "Заказ по трансферу" };
+  function paintTransfer() {
+    $("#t-amount").textContent = state.points === null ? "—" : points(state.points);
+    const t = state.transfer;
+    if (!t) return;
+    if (t.error) {
+      histRoot.innerHTML = `<h3>История</h3><p class="muted">${esc(t.error)}</p>`;
+      return;
+    }
+    const all = t.orders;
+    const rows = all.slice(0, state.transferShown).map((o) => {
+      const amount = Number(o.amount ?? 0);
+      const inc = amount > 0;
+      const who = [o.client?.surname, o.client?.name].filter(Boolean).join(" ");
+      const sub = [dmy(o.date), who, o.branch?.city].filter(Boolean).join(" · ");
+      return `<li class="h-row"><span class="h-ico ${inc ? "in" : "out"}">${inc ? "↓" : "↑"}</span><div class="h-main"><b>${o.orderId ? `Заказ № ${esc(o.orderId)}` : esc(TRANSFER_TYPES[o.type] || "Операция")}</b><span>${esc(sub)}</span></div><span class="h-sum ${inc ? "in" : ""}">${inc ? "+" : "−"}${esc(points(Math.abs(amount)))}</span></li>`;
+    });
+    histRoot.innerHTML = `<div class="h-head"><h3>История</h3></div>
+      ${rows.length ? `<ul class="h-list">${rows.join("")}</ul>` : `<p class="muted">Операций пока нет.</p>`}
+      ${all.length > state.transferShown ? `<button class="h-more" type="button" id="transfer-more">Показать ещё</button>` : ""}`;
+    histRoot.querySelector("#transfer-more")?.addEventListener("click", () => {
+      state.transferShown += 20;
+      paintTransfer();
+    });
+  }
+  async function loadTransfer() {
+    if (!state.transfer) histRoot.innerHTML = `<h3>История</h3><p class="muted">Загружаем…</p>`;
+    const r = await api(`${P}/personal-new/transfer/reports/branches?displayBalance=true&displayOrders=true`);
+    const orders = r.json?.data?.orders;
+    state.transfer = r.ok && Array.isArray(orders) ? { orders: [...orders].sort((a, b) => String(b.date).localeCompare(String(a.date)) || Number(b.orderId) - Number(a.orderId)) } : { error: problem(r) };
+    paintTransfer();
+    return r;
+  }
+
+  /* ---------- моя структура: уровни, как в оргсхеме ---------- */
+  const structRoot = $("#h-structure");
+  const POS = { CONSUMER: "Потребитель", DISTRIBUTOR: "Дистрибьютор", CANDIDATE: "Кандидат", FRIEND: "Друг клуба" };
+  /** Глубина из поля level: «.0» → 0, «.2» → 2, «.1.2» → 2, «..3» → 3. */
+  const depthOf = (level) => {
+    const nums = String(level ?? "").match(/-?\d+/g);
+    if (nums?.length === 1) return Number(nums[0]);
+    if (nums?.length > 1) return nums.length;
+    const dots = String(level ?? "").match(/\./g);
+    return dots ? dots.length : null;
+  };
+  const roleOf = (n) => RANKS.find((r) => r.codes.includes(n.rank))?.name || POS[n.position] || (n.rank ? `Ранг ${rankRu(n.rank)}` : "Участник");
+  const avatar = (n, cls = "") => {
+    const hue = (Number(n.id) * 47) % 360;
+    const ini = String(n.name || "").split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0]).join("").toUpperCase() || "•";
+    return `<span class="st-av ${cls}" style="--h:${hue}">${n.avatar ? `<img src="${esc(n.avatar)}" alt="" referrerpolicy="no-referrer" />` : esc(ini)}</span>`;
+  };
+
+  /** Дерево из плоского отчёта: отчёт идёт в порядке обхода, родитель = ближайшая запись с глубиной на 1 меньше. */
+  function buildTree(items) {
+    const nodes = items.map((it) => ({ id: String(it.memberId), name: titleCase(it.fullName || [it.surname, it.name].filter(Boolean).join(" ")) || `ID ${it.memberId}`, rank: it.rank, position: it.position, lo: it.volumePersonal, go: it.volumeGroup, depth: depthOf(it.level), children: [] }));
+    const hasDepth = nodes.some((n) => n.depth !== null);
+    if (!hasDepth) return { flat: true, root: { id: "root", name: "Моя структура", children: nodes }, byId: new Map(nodes.map((n) => [n.id, n])) };
+    const stack = [];
+    let root = null;
+    for (const n of nodes) {
+      while (stack.length && stack[stack.length - 1].depth >= n.depth) stack.pop();
+      if (stack.length) stack[stack.length - 1].children.push(n);
+      else if (!root) root = n;
+      stack.push(n);
+    }
+    const byId = new Map();
+    const walk = (n) => (byId.set(n.id, n), n.children.forEach(walk));
+    walk(root);
+    return { flat: false, root, byId };
+  }
+
+  function paintStructure() {
+    const s = state.struct;
+    if (!s) return;
+    if (s.error) {
+      structRoot.innerHTML = `<section class="h-card"><p class="muted">${esc(s.error)}</p></section>`;
+      return;
+    }
+    const { root, byId } = s;
+    // путь: выбранные участники сверху вниз (без корня), хранится в state.path
+    const path = [root, ...state.path.map((id) => byId.get(id)).filter(Boolean)];
+    const parts = [`<div class="st-me">${avatar(root, "big")}<div><b>${esc(root.name)}</b><span>${s.flat ? "Все участники" : esc(roleOf(root))}</span></div></div>`];
+    path.forEach((node, i) => {
+      const kids = node.children;
+      const next = path[i + 1];
+      const label = `<p class="st-label">Подчинённых: ${kids.length}</p>`;
+      if (!kids.length) return void parts.push(`${label}<p class="muted st-empty">У этого участника пока нет подчинённых.</p>`);
+      if (next) {
+        parts.push(`<section class="st-level">${label}<div class="st-row">${kids.map((k) => `<button type="button" class="st-chip ${k === next ? "on" : ""}" data-id="${esc(k.id)}" aria-label="${esc(k.name)}">${avatar(k, k === next ? "sel" : "")}</button>`).join("")}</div><div class="st-pick"><b>${esc(next.name)}</b><span>${esc(roleOf(next))}</span></div></section>`);
+      } else {
+        parts.push(`<section class="st-level">${label}<div class="st-grid">${kids.map((k) => `<button type="button" class="st-card" data-id="${esc(k.id)}">${avatar(k)}<b>${esc(k.name)}</b><span>${esc(roleOf(k))}</span>${k.children.length ? `<em>${k.children.length} подчин.</em>` : ""}</button>`).join("")}</div></section>`);
+      }
+    });
+    structRoot.innerHTML = `<section class="h-card st-wrap">${parts.join("")}</section>`;
+    structRoot.querySelectorAll("[data-id]").forEach((b) => {
+      b.onclick = () => {
+        const id = b.dataset.id;
+        const i = state.path.length ? path.findIndex((n) => n.children.some((k) => k.id === id)) : 0;
+        state.path = [...state.path.slice(0, Math.max(i, 0)), id];
+        paintStructure();
+      };
+    });
+  }
+  async function loadStructure() {
+    if (state.struct && !state.struct.error) return;
+    structRoot.innerHTML = `<section class="h-card"><p class="muted">Загружаем структуру…</p></section>`;
+    const now = new Date();
+    const month = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const months = [month(now), month(new Date(now.getFullYear(), now.getMonth() - 1, 1))];
+    let rep = null;
+    for (const m of months) {
+      const r = await api(`${P}/personal-new/structure/reports?month=${m}&type=PRep`);
+      const list = r.json?.data?.structure;
+      if (r.ok && Array.isArray(list) && list.length) {
+        rep = list;
+        break;
+      }
+      rep = rep ?? (r.ok ? [] : null);
+      if (!r.ok && m === months[1]) state.struct = { error: problem(r) };
+    }
+    if (!rep || !rep.length) {
+      state.struct = state.struct ?? { error: "В отчёте нет данных по структуре." };
+      return paintStructure();
+    }
+    state.struct = buildTree(rep);
+    state.path = [];
+    paintStructure();
+    // фото участников: из отчёта по контактам, по возможности
+    const c = await api(`${P}/personal-new/structure/reports/contact?showInactive=false`);
+    const people = c.json?.data?.structure;
+    if (c.ok && Array.isArray(people)) {
+      const photo = new Map(people.filter((p) => p.avatar).map((p) => [String(p.memberId), p.avatar]));
+      state.struct.byId.forEach((n) => (n.avatar = photo.get(n.id) ?? null));
+      paintStructure();
+    }
+  }
+
+  /* ---------- история заказов ---------- */
+  const ordersRoot = $("#h-orders");
+  function paintOrders() {
+    if (!state.orders) return;
+    if (state.orders.error) {
+      ordersRoot.innerHTML = `<h3>История заказов</h3><p class="muted">${esc(state.orders.error)}</p>`;
+      return;
+    }
+    const all = state.orders.items;
+    const rows = all.slice(0, state.ordersShown).map((o) => {
+      const [label, kind] = STATUS[o.status] ?? [o.status || "—", "wait"];
+      const tags = [o.isPersonal && "Личный", o.isTransfer && "Трансфер", o.isGroup && "Групповой"].filter(Boolean);
+      const sub = [dmy(o.createdAt), o.productsCount ? count(o.productsCount, ["товар", "товара", "товаров"]) : "", o.bonus?.total ? points(Number(o.bonus.total)) : ""].filter(Boolean).join(" · ");
+      return `<li class="h-row"><div class="h-main"><b>Заказ № ${esc(o.id)}</b><span>${esc(sub)}</span>${tags.length ? `<span class="h-tags">${tags.map((t) => `<i>${esc(t)}</i>`).join("")}</span>` : ""}</div><div class="h-side"><span class="h-sum">${o.totalPrice ? esc(money(Number(o.totalPrice.amount), o.totalPrice.currency || state.currency)) : "—"}</span><em class="pill ${kind}">${esc(label)}</em></div></li>`;
+    });
+    ordersRoot.innerHTML = `<div class="h-head"><h3>История заказов</h3><span class="muted">${esc(count(all.length, ["заказ", "заказа", "заказов"]))}</span></div>
+      ${rows.length ? `<ul class="h-list">${rows.join("")}</ul>` : `<p class="muted">Заказов пока нет.</p>`}
+      ${all.length > state.ordersShown ? `<button class="h-more" type="button" id="orders-more">Показать все</button>` : ""}`;
+    ordersRoot.querySelector("#orders-more")?.addEventListener("click", () => {
+      state.ordersShown = all.length;
+      paintOrders();
+    });
+  }
+  async function loadOrders() {
+    ordersRoot.innerHTML = `<h3>История заказов</h3><p class="muted">Загружаем…</p>`;
+    const r = await api(`${P}/personal-new/shop/orders`);
+    const items = r.json?.data;
+    state.orders = r.ok && Array.isArray(items) ? { items: [...items].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || Number(b.id) - Number(a.id)) } : { error: problem(r) };
+    paintOrders();
+    return r;
+  }
+
+  /* ---------- карточка участника: ранг и условия ---------- */
+  const numOf = (v) => Number(String(v ?? "").replace(/\s/g, "").replace(",", "."));
+  const fmt = (n) => n.toLocaleString("ru-RU", { maximumFractionDigits: 1 });
+  const LOCK = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
+  const CHECK = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`;
+
+  /** Код ранга участника: из отчёта по структуре, иначе из показателей (последний месяц). */
+  function rankCodes() {
+    const star = [...(state.metricsJson?.data?.volumeQualifyingStar ?? [])].sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+    return [state.member?.rank, state.member?.fullNameRank, star?.rank, star?.fullRank].filter(Boolean);
+  }
+
+  /** Позиция в таблице условий: номер, -1 если ранг ниже директора, null если код неизвестен. */
+  function rankIndexNow() {
+    for (const t of rankCodes()) {
+      const i = RANKS.findIndex((r) => r.codes.includes(t));
+      if (i >= 0) return i;
+      if (PRE.includes(t)) return -1;
+    }
+    return null;
+  }
+
+  /** Плашка одного условия: что нужно и сколько уже есть. */
+  const pill = (label, need, have, full = label) => {
+    const done = have !== null && have >= need;
+    return `<li class="${done ? "done" : ""}" title="${esc(full)}${done ? " (выполнено)" : ""}"><span>${done ? "✓ " : ""}${esc(label)}</span>${have !== null ? `<b>${fmt(have)}</b><em>из ${fmt(need)}</em>` : `<b>${fmt(need)}</b>`}</li>`;
+  };
+
+  function rankCard(r, i, cur, f) {
+    const need = [
+      ["ЛО", r.lo, f?.lo, "Личный объём"],
+      ["ГО", r.go, f?.go, "Групповой объём"],
+      r.branches && ["Ветви", r.branches, f?.branches, "Ветви"],
+      r.directors && ["Дир.", r.directors, f?.directors, "Директора"],
+      r.sop && [r.sopStar ? "СОП*" : "СОП", r.sop, f?.sop, "Сетевой объём поколений"],
+    ].filter(Boolean);
+    const own = cur !== null && (i === cur || i === cur + 1); // свои цифры показываем только у текущего и следующего
+    const rows = need.map(([k, n, h, t]) => ({ k, n, t, h: own && h !== undefined ? h : null }));
+    const left = rows.filter((x) => x.h !== null && x.h < x.n).length;
+    const st = cur === null ? "plain" : i < cur ? "past" : i === cur ? "now" : i === cur + 1 ? "next" : "ahead";
+    const icon = st === "past" ? CHECK : st === "next" || st === "ahead" ? LOCK : "";
+    const phrase =
+      st === "plain"
+        ? "Что нужно для этого ранга"
+        : st === "past"
+          ? "Ранг уже пройден"
+          : st === "ahead"
+            ? `Откроется после ранга «${RANKS[i - 1].name}»`
+            : !f
+              ? "Цифры за месяц загружаются…"
+              : left === 0
+                ? st === "now"
+                  ? "В этом месяце условия выполнены"
+                  : "Все условия по текущим данным выполнены"
+                : st === "now"
+                  ? `В этом месяце выполнено ${rows.length - left} из ${rows.length}`
+                  : `Чтобы открыть, выполнено ${rows.length - left} из ${rows.length}`;
+    const pills = st === "past" ? "" : `<ul class="rk-pills">${rows.map((x) => pill(x.k, x.n, x.h, x.t)).join("")}</ul>`;
+    return `<li class="rk rk-${r.tone} rk-${st}" title="${esc(r.perk)}: ${esc(r.opens)}"><h2 class="rk-name"><span>${esc(r.name)}</span>${icon ? `<i aria-hidden="true">${icon}</i>` : ""}</h2><p class="rk-phrase">${esc(phrase)}</p>${pills}</li>`;
+  }
+
+  /** Карточка текущего ранга, когда его нет в таблице условий (ниже директора или код неизвестен). */
+  function ownCard(d, pre) {
+    const code = rankCodes()[0];
+    const crit = d
+      ? [
+          ["ЛО", numOf(d.volumePersonal), numOf(d.volumePersonalPlan)],
+          ["ГО", numOf(d.volumeGroup), numOf(d.volumeGroupPlan)],
+          ["Ветви", numOf(d.directorBranchesCount), 0],
+          ["Дир.", numOf(d.generationDirectorsCount), 0],
+          ["СОП", numOf(d.volumeQualifyingStar), numOf(d.volumeQualifyingStarPlan)],
+        ]
+          .map(([k, v, plan]) => (plan > 0 ? pill(k, plan, v) : `<li><span>${esc(k)}</span><b>${fmt(v)}</b></li>`))
+          .join("")
+      : "";
+    return `<li class="rk rk-x rk-now" title="Код ранга из API: ${esc(code ?? "нет")}"><h2 class="rk-name"><span>${code ? esc(rankRu(code)) : "&nbsp;"}</span></h2><p class="rk-phrase">${pre ? "Ваш ранг, ниже директора" : "Ваш ранг"}</p>${crit ? `<ul class="rk-pills">${crit}</ul>` : ""}</li>`;
+  }
+
+  function paintUser() {
+    const list = $("#h-ranks");
+    const dots = $("#h-dots");
+    const d = state.dash;
+    const f = d ? { lo: numOf(d.volumePersonal), go: numOf(d.volumeGroup), branches: numOf(d.directorBranchesCount), directors: numOf(d.generationDirectorsCount), sop: numOf(d.volumeQualifyingStar) } : null;
+    const cur = rankIndexNow();
+    if (cur === null) console.info("Ранг из API не найден в ranks.js:", rankCodes());
+    const keep = list.scrollLeft;
+    const key = `${cur}|${rankCodes()[0]}`;
+    const firstTime = state.rkKey !== key;
+    const hasOwn = cur === null || cur < 0;
+    list.innerHTML = (hasOwn ? ownCard(d, cur === -1) : "") + RANKS.map((r, i) => rankCard(r, i, cur, f)).join("");
+    const items = [...list.children];
+    dots.innerHTML = items.map(() => "<i></i>").join("");
+    const mark = () => {
+      const x = list.getBoundingClientRect().left;
+      let best = 0;
+      items.forEach((el, i) => {
+        if (Math.abs(el.getBoundingClientRect().left - x) < Math.abs(items[best].getBoundingClientRect().left - x)) best = i;
+      });
+      [...dots.children].forEach((e, i) => e.classList.toggle("on", i === best));
+    };
+    list.onscroll = () => requestAnimationFrame(mark);
+    const start = hasOwn ? 0 : cur;
+    list.scrollLeft = firstTime ? items[start].getBoundingClientRect().left - list.getBoundingClientRect().left + list.scrollLeft : keep;
+    state.rkKey = key;
+    mark();
+  }
+
+  /** Показатели: ответ метрик и дашборд приходят в любом порядке, плитки перерисовываются по обоим. */
+  function paintMetrics() {
+    if (state.metricsJson) renderMetrics(metricsRoot, state.metricsJson, state.dash, state.metricsAt ?? new Date());
+  }
+
+  /** Каждый кусок экрана рисуется, как только пришёл его ответ: один медленный запрос не прячет остальное. */
+  async function load() {
+    const acc = await api(`${P}/account`);
+    state.profile = acc.json?.data ?? null;
+    state.currency = state.profile?.currency || state.currency;
+    paint();
+    const chkJob = api(`${P}/account/checking_accounts?currency=${encodeURIComponent(state.currency)}`).then((chk) => {
+      const row = Array.isArray(chk.json?.data) ? chk.json.data[0] : chk.json?.data;
+      state.balance = chk.ok && row && row.balance !== undefined ? Number(row.balance) : null;
+      paint();
+      return chk;
+    });
+    const monJob = api(`${P}/personal-new/transfer/month?timeZone=${encodeURIComponent(tz)}`).then((mon) => {
+      const items = mon.json?.data?.item ?? [];
+      state.months = [...items].sort((a, b) => (String(a.month) < String(b.month) ? 1 : -1));
+      // на трансферном счёте: баллы текущего (последнего) месяца
+      state.points = mon.ok && state.months.length ? Number(state.months[0].balanceMonth ?? 0) : null;
+      state.pointsLoaded = true;
+      paint();
+      return mon;
+    });
+    const dashJob = api(`${P}/account/dashboard`).then((r) => {
+      state.dash = r.ok ? (r.json?.data ?? null) : null;
+      paintUser();
+      paintMetrics();
+      return r;
+    });
+    const now = new Date();
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const memJob = api(`${P}/personal-new/structure/current/member?month=${ym}&type=PRep`).then((r) => {
+      state.member = r.ok ? (r.json?.data ?? null) : null;
+      paintUser();
+      return r;
+    });
+    const metJob = api(`${P}/account/metrics`).then((met) => {
+      if (met.ok) {
+        state.metricsJson = met.json;
+        state.metricsAt = new Date();
+      }
+      paintUser();
+      if (met.ok) paintMetrics();
+      else metricsMessage(metricsRoot, met.status === 403 ? "Показатели недоступны для этого аккаунта (403)." : `Не удалось получить показатели: ${problem(met)}`);
+      return met;
+    });
+    const [chk, mon, met] = await Promise.all([chkJob, monJob, metJob, dashJob, memJob]);
+    return { chk, mon, met };
+  }
+
+  /* ---------- переходы: главная ↔ экраны «Движение бонусов» и «История заказов» ---------- */
+  function route() {
+    const page = { "#/bonus": "bonus", "#/orders": "orders", "#/transfer": "transfer", "#/structure": "structure" }[location.hash] ?? "";
+    $("#h-main").hidden = Boolean(page);
+    $("#h-detail").hidden = !page;
+    $("#h-bonus").hidden = page !== "bonus";
+    $("#h-orders").hidden = page !== "orders";
+    $("#h-transfer").hidden = page !== "transfer";
+    $("#h-structure").hidden = page !== "structure";
+    $("#h-dtitle").textContent = { bonus: "Движение бонусов", orders: "История заказов", structure: "Моя структура" }[page] ?? "";
+    if (page === "bonus" && !state.bonus) loadBonus();
+    if (page === "orders" && !state.orders) loadOrders();
+    if (page === "structure") loadStructure();
+    if (page === "transfer") {
+      paintTransfer();
+      loadTransfer();
+    }
+    window.scrollTo(0, 0);
+  }
+  window.addEventListener("hashchange", route);
+  route();
+
+  return { load, paint };
+}
