@@ -72,7 +72,7 @@ const readBody = (req, limit = 1_000_000) =>
   });
 
 /** Запрос к магазину с куками сессии; Set-Cookie ответа оседают в её банке. */
-function upstream(sess, { method, urlPath, headers = {}, body }) {
+function upstream(sess, { method, urlPath, headers = {}, body, noBearer = false }) {
   return new Promise((resolve, reject) => {
     // магазину нужна кука с часовым поясом, иначе методы личного кабинета дописывают к JSON скрипт
     if (!sess.jar.has("cci_detected_timezone")) sess.jar.set("cci_detected_timezone", encodeURIComponent(sess.tz ?? "Europe/Moscow"));
@@ -84,7 +84,7 @@ function upstream(sess, { method, urlPath, headers = {}, body }) {
       ...(cookie ? { cookie } : {}),
     };
     if (body !== undefined) h["content-length"] = Buffer.byteLength(body);
-    if (sess.token && !h.authorization) h.authorization = `Bearer ${sess.token}`;
+    if (sess.token && !h.authorization && !noBearer) h.authorization = `Bearer ${sess.token}`;
     const r = https.request({ host: HOST, path: urlPath, method, headers: h, timeout: 30000 }, (up) => {
       for (const c of up.headers["set-cookie"] ?? []) {
         const [pair] = c.split(";");
@@ -199,6 +199,34 @@ async function login(req, res, sess) {
   });
 }
 
+/**
+ * Чек-аут магазина (/sv-api/*) для собственной страницы оформления в ЛК.
+ * Эти методы работают только на домене магазина и по его сессии, поэтому браузер ходит к стенду
+ * (/lk/shop/...), а стенд — к магазину с авторизованной сессией этого входа (банка кук, как и /api/).
+ * Пускаем только то, что нужно оформлению; создавать заказ (POST /sv-api/order) можно лишь запросом, который
+ * браузер шлёт по нажатию «Оформить заказ» после подтверждения.
+ */
+const SHOP_GET = [
+  /^\/sv-api\/(init|delivery|payments|pickpoints|profiles|receivers|promo|getOrder|order|checkLocality|getProfilePrice)$/,
+  /^\/shop\/shop_basket\.php$/,
+  /^\/restApi\/v4\/location\/getLocation$/,
+];
+const SHOP_POST = [/^\/sv-api\/order$/];
+async function shopProxy(req, res, sess, url) {
+  if (!sess.auth) return json(res, 401, { error: "Сначала войдите" });
+  const rest = url.pathname.replace(/^\/lk\/shop/, "");
+  const list = req.method === "POST" ? SHOP_POST : req.method === "GET" ? SHOP_GET : [];
+  if (!list.some((re) => re.test(rest))) return json(res, 403, { error: "Этот путь чек-аута стенд не пропускает", path: rest });
+  const body = req.method === "POST" ? await readBody(req) : undefined;
+  const headers = {};
+  if (req.headers["content-type"]) headers["content-type"] = req.headers["content-type"];
+  const started = Date.now();
+  const r = await upstream(sess, { method: req.method, urlPath: rest + url.search, headers, body, noBearer: true });
+  console.log(`shop ${req.method} ${rest} → ${r.status} (${Date.now() - started} мс)`);
+  res.writeHead(r.status, { "content-type": r.type, "cache-control": "no-store" });
+  res.end(r.text);
+}
+
 async function proxy(req, res, sess, url) {
   const rest = url.pathname.replace(/^\/api/, "/restApi");
   if (!ALLOWED.test(rest)) return json(res, 403, { error: "Этот путь стенд не пропускает", path: rest });
@@ -245,6 +273,7 @@ http
         const { applicationToken, ...open } = CONFIG; // токен приложения наружу не нужен
         return json(res, 200, open);
       }
+      if (url.pathname.startsWith("/lk/shop/")) return await shopProxy(req, res, sess, url);
       if (url.pathname.startsWith("/api/")) return await proxy(req, res, sess, url);
       return await serveStatic(res, url.pathname);
     } catch (e) {

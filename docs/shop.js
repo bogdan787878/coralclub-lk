@@ -100,7 +100,7 @@ function parseCart(json, me) {
   return out;
 }
 
-export function createShop(root, { api, P, memberId, money, esc, sheet, onCount }) {
+export function createShop(root, { api, P, memberId, money, esc, sheet, onCount, ownCheckout }) {
   const products = new Map(); // код → продукт
   let cart = new Map(); // код → количество
   let cartLoaded = false;
@@ -330,7 +330,7 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount 
         <div class="s-sumrow"><span>Товаров</span><b>${count()}</b></div>
         ${known ? `<div class="s-sumrow s-total"><span>Итого</span><b>${esc(price(total))}</b></div>` : ""}
         <button class="btn s-go" type="button" data-go>Оформить заказ</button>
-        <p class="s-note">Доставка, оплата и промокод выбираются на странице оформления магазина. Заказ создаётся там, после вашего подтверждения.</p>
+        <p class="s-note">${ownCheckout?.() ? "Адрес, доставку и оплату выберете на следующем шаге. Заказ создаётся после вашего подтверждения." : "Доставка, оплата и промокод выбираются на странице оформления магазина. Заказ создаётся там, после вашего подтверждения."}</p>
       </section>`);
   }
 
@@ -419,7 +419,12 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount 
       if (t.closest("[data-dec]")) return changeQty(code, -1);
       if (t.closest("[data-del]")) return removeItem(code);
     }
-    if (t.closest("[data-go]")) return checkout(t.closest("[data-go]"));
+    if (t.closest("[data-go]")) {
+      // свой чек-аут внутри ЛК, если стенд умеет ходить в магазин; иначе запасной путь: страница оформления магазина
+      if (ownCheckout?.()) location.hash = "#/checkout";
+      else checkout(t.closest("[data-go]"));
+      return;
+    }
   });
 
   function show(tab) {
@@ -427,5 +432,7 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount 
     ({ shop: renderHome, catalog: renderCatalog, cart: renderCart, fav: renderFav })[tab]?.();
   }
 
-  return { show, refreshCart, count, loaded: () => cartLoaded };
+  /** Корзина с данными продуктов: для страницы оформления. */
+  const lines = () => [...cart].map(([code, qty]) => ({ code, qty, p: getP(code) }));
+  return { show, refreshCart, count, lines, toast, loaded: () => cartLoaded };
 }

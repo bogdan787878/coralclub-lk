@@ -85,6 +85,17 @@ export async function request(path, opts = {}) {
   return call(API + path.replace("/restApi/proxyCC4", ""), { ...opts, bearer: token });
 }
 
+/**
+ * Чек-аут магазина (/sv-api/*) для собственной страницы оформления. Магазин принимает такие запросы только по своей
+ * сессии, поэтому они идут через стенд (npm start), у которого есть авторизованная сессия магазина.
+ * На статичном хостинге (прямой режим) такой сессии нет: shopReady() = false.
+ */
+export const shopReady = () => mode === "server";
+export async function shopRequest(path, opts = {}) {
+  if (mode !== "server") return { status: 0, ok: false, json: null, text: "Оформление внутри ЛК работает при запуске стенда (npm start)", type: "" };
+  return call(`lk/shop${path}`, opts);
+}
+
 /** Вход: логин и пароль уходят только на сервер Coral Club (через стенд или напрямую). */
 export async function login({ login: user, password, timeZone }) {
   if (mode === "server") {

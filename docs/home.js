@@ -5,6 +5,7 @@ import { PRE, RANKS } from "./ranks.js";
 import { attachHints } from "./hint.js";
 import { computeTasks, lineLabel, personName, rankName } from "./tasks.js";
 import { createShop } from "./shop.js";
+import { createCheckout } from "./checkout.js";
 
 const P = "/restApi/proxyCC4";
 const tz = String(new Date().getTimezoneOffset()); // как просит API: минуты смещения, например -180
@@ -71,7 +72,7 @@ function problem(r) {
   return j?.message || (r.status === 401 ? "Нужно войти заново" : r.status === 403 ? "Нет доступа" : `Ошибка ${r.status || "сети"}`);
 }
 
-export function createHome(root, api, { onLogout } = {}) {
+export function createHome(root, api, { onLogout, shopRequest, shopReady } = {}) {
   const state = { profile: null, currency: "RUB", balance: null, points: null, pointsLoaded: false, months: [], orders: null, bonus: null, bonusMonths: 6, bonusShown: 8, ordersShown: 5, dash: null, member: null, metricsJson: null, transfer: null, transferShown: 8, struct: null, path: [] };
 
   root.innerHTML = `
@@ -118,6 +119,7 @@ export function createHome(root, api, { onLogout } = {}) {
       <section class="h-card" id="h-orders" hidden aria-label="История заказов"></section>
       <div id="h-structure" hidden></div>
       <div id="h-profile" hidden></div>
+      <div id="h-checkout" hidden></div>
       <div id="h-transfer" hidden>
         <section class="h-balance" aria-label="Трансферный счёт">
           <p class="h-amount sk" id="t-amount">—</p>
@@ -1134,7 +1136,7 @@ export function createHome(root, api, { onLogout } = {}) {
 
   /* ---------- переходы: главная ↔ экраны «Движение бонусов» и «История заказов» ---------- */
   function route() {
-    const page = { "#/wallet": "bonus", "#/bonus": "bonus", "#/profile": "profile", "#/orders": "orders", "#/transfer": "transfer", "#/structure": "structure" }[location.hash] ?? "";
+    const page = { "#/wallet": "bonus", "#/bonus": "bonus", "#/profile": "profile", "#/orders": "orders", "#/transfer": "transfer", "#/structure": "structure", "#/checkout": "checkout" }[location.hash] ?? "";
     // нижнее меню: главная (магазин), каталог, корзина, избранное, профиль (кабинет)
     const tab = page ? "" : { "#/catalog": "catalog", "#/cart": "cart", "#/fav": "fav", "#/me": "me" }[location.hash] ?? "shop";
     $("#h-main").hidden = tab !== "me";
@@ -1149,7 +1151,10 @@ export function createHome(root, api, { onLogout } = {}) {
     $("#h-transfer").hidden = page !== "transfer";
     $("#h-structure").hidden = page !== "structure";
     $("#h-profile").hidden = page !== "profile";
-    $("#h-dtitle").textContent = { bonus: "Coral Кошелёк", transfer: "Трансферный счёт", orders: "История заказов", structure: "Моя структура", profile: "Профиль" }[page] ?? "";
+    $("#h-checkout").hidden = page !== "checkout";
+    $(".h-back").setAttribute("href", page === "checkout" ? "#/cart" : "#/me");
+    $("#h-dtitle").textContent = { bonus: "Coral Кошелёк", transfer: "Трансферный счёт", orders: "История заказов", structure: "Моя структура", profile: "Профиль", checkout: "Оформление заказа" }[page] ?? "";
+    if (page === "checkout" && state.ready) checkout.open();
     if (page === "bonus" && !state.bonus) loadBonus();
     if (page === "orders" && !state.orders) loadOrders();
     if (page === "structure") loadStructure();
@@ -1166,11 +1171,27 @@ export function createHome(root, api, { onLogout } = {}) {
     money,
     esc,
     sheet: { open: openSheet, close: closeSheet },
+    ownCheckout: () => Boolean(shopReady?.()),
     onCount: (n) => {
       const b = $("#tb-badge");
       b.textContent = n > 99 ? "99+" : String(n);
       b.hidden = n === 0;
     },
+  });
+  const checkout = createCheckout($("#h-checkout"), {
+    shopRequest,
+    shopReady,
+    shop,
+    who: () => {
+      const p = state.profile ?? {};
+      return { fio: p.name || p.surname ? fio(p) : "", phone: p.phone ?? "", email: p.email ?? "", city: p.address?.city ?? "" };
+    },
+    api,
+    P,
+    money,
+    esc,
+    sheet: { open: openSheet, close: closeSheet },
+    toast: (t, bad) => shop.toast(t, bad),
   });
   window.addEventListener("hashchange", route);
   route();

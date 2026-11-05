@@ -618,3 +618,35 @@ body.has-tabbar .home { padding-bottom: calc(112px + env(safe-area-inset-bottom)
 @media (prefers-reduced-motion: reduce) { .s-toast { transition: none; } }
 .s-badges { position: absolute; top: 10px; left: 10px; display: flex; flex-wrap: wrap; gap: 4px; max-width: calc(100% - 60px); }
 .s-badges i { padding: 3px 8px; border-radius: 999px; background: #fff; color: #5d6b78; font-style: normal; font-size: .68rem; font-weight: var(--fw-strong); box-shadow: 0 1px 3px rgba(20, 30, 40, .1); }
+
+/* ---------- оформление заказа ---------- */
+#h-detail #h-checkout .h-card h3 { display: block; margin-bottom: 10px; }
+#h-checkout { display: flex; flex-direction: column; gap: 12px; }
+#h-checkout[hidden] { display: none; }
+#h-checkout .h-card { margin-top: 0; }
+.ck-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ck-items li { display: flex; justify-content: space-between; gap: 12px; font-size: .9rem; }
+.ck-items b { flex: none; font-weight: var(--fw-strong); }
+.ck-card { display: flex; flex-direction: column; gap: 10px; }
+#h-detail #h-checkout .ck-card h3 { margin: 0; }
+.ck-f { display: flex; flex-direction: column; gap: 5px; margin: 0; font-size: .8rem; color: var(--muted); }
+.ck-f em { color: var(--bad); font-style: normal; font-size: .78rem; }
+.ck-f.bad input { border-color: var(--bad); }
+.ck-f textarea { margin-top: 0; font-family: inherit; }
+.ck-row { display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 8px; align-items: end; }
+.ck-opts { display: flex; flex-direction: column; gap: 8px; margin: 2px 0; }
+.ck-opt { position: relative; display: flex; flex-direction: row; text-align: left; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 14px; cursor: pointer; font-size: .9rem; color: var(--ink); }
+.ck-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.ck-opt.on { border-color: var(--teal); background: #eef6f4; }
+.ck-opt-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ck-opt-main b { font-weight: var(--fw-strong); }
+.ck-opt-main small { color: var(--muted); font-size: .78rem; }
+.ck-opt-r { flex: none; font-weight: var(--fw-strong); }
+.ck-check { display: flex; align-items: flex-start; flex-direction: row; gap: 10px; font-size: .85rem; color: var(--ink); cursor: pointer; }
+.ck-check input { flex: none; width: 20px; height: 20px; margin-top: 1px; }
+.ck-check.bad span { color: var(--bad); }
+.ck-done h2 { margin: 0; font-size: 1.4rem; }
+.ck-ok { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: #e3f5ea; color: var(--ok); font-size: 2rem; }
+.ck-done .btn.ghost { text-decoration: none; display: inline-block; padding: 12px 26px; }
+.ck-f:not(.bad) em { display: none; }
+.ck-done h2 { color: var(--ink); }

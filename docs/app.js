@@ -1,6 +1,6 @@
 // Стенд ЛК: вход, главная в духе банковского приложения (home.js) и отладочный раздел с запросами к API.
 import { createHome } from "./home.js";
-import { init, login as doLogin, logout as doLogout, request } from "./client.js";
+import { init, login as doLogin, logout as doLogout, request, shopReady, shopRequest } from "./client.js";
 
 const $ = (s) => document.querySelector(s);
 const el = (tag, attrs = {}, ...kids) => {
@@ -38,7 +38,7 @@ async function signOut() {
   location.replace(location.pathname + location.search);
 }
 
-const home = createHome($("#home"), api, { onLogout: signOut });
+const home = createHome($("#home"), api, { onLogout: signOut, shopRequest, shopReady });
 
 /* ---------- вход ---------- */
 const loginForm = $("#login-form");
