@@ -7,7 +7,7 @@ export const API = "https://api.coral.club/api/v1";
 const KEY = "lk_direct_token";
 
 let mode = "server";
-let cfg = { applicationToken: "", deliveryId: "RU", language: "ru" };
+let cfg = { applicationToken: "", deliveryId: "RU", language: "ru", shopWorker: "" };
 let token = null;
 
 const read = () => {
@@ -41,11 +41,11 @@ const parse = (text) => {
   }
 };
 
-async function call(url, { method = "GET", body, bearer } = {}) {
+async function call(url, { method = "GET", body, bearer, headers: extra } = {}) {
   try {
     const r = await fetch(url, {
       method,
-      headers: { ...(body !== undefined ? { "content-type": "application/json" } : {}), ...(bearer ? { authorization: `Bearer ${bearer}` } : {}) },
+      headers: { ...(body !== undefined ? { "content-type": "application/json" } : {}), ...(bearer ? { authorization: `Bearer ${bearer}` } : {}), ...(extra ?? {}) },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
     const text = await r.text();
@@ -87,13 +87,63 @@ export async function request(path, opts = {}) {
 
 /**
  * Чек-аут магазина (/sv-api/*) для собственной страницы оформления. Магазин принимает такие запросы только по своей
- * сессии, поэтому они идут через стенд (npm start), у которого есть авторизованная сессия магазина.
- * На статичном хостинге (прямой режим) такой сессии нет: shopReady() = false.
+ * сессии, поэтому они идут через посредника, у которого эта сессия есть:
+ *  - режим «сервер»: стенд (npm start), /lk/shop/...;
+ *  - режим «напрямую» (GitHub Pages): Cloudflare Worker из config.json (shopWorker), см. worker/. Он открывает сессию
+ *    магазина по токену API кабинета, пароль ему не нужен.
+ * Без того и другого shopReady() = false, и корзина ведёт на страницу оформления магазина.
  */
-export const shopReady = () => mode === "server";
+const SID_KEY = "lk_shop_sid";
+const readSid = () => {
+  try {
+    return sessionStorage.getItem(SID_KEY);
+  } catch {
+    return null;
+  }
+};
+const saveSid = (v) => {
+  try {
+    v ? sessionStorage.setItem(SID_KEY, v) : sessionStorage.removeItem(SID_KEY);
+  } catch {
+    /* без хранилища сессию магазина откроем заново после обновления страницы */
+  }
+};
+const worker = () => String(cfg.shopWorker || "").replace(/\/+$/, "");
+export const shopReady = () => mode === "server" || (mode === "direct" && Boolean(worker()) && Boolean(token));
+
+async function workerSession(force = false) {
+  const have = force ? null : readSid();
+  if (have) return have;
+  const r = await call(`${worker()}/session`, { method: "POST", bearer: token });
+  const sid = r.json?.sid;
+  if (!sid) throw new Error(r.json?.error || `Посредник ответил ${r.status}`);
+  saveSid(sid);
+  return sid;
+}
+
 export async function shopRequest(path, opts = {}) {
-  if (mode !== "server") return { status: 0, ok: false, json: null, text: "Оформление внутри ЛК работает при запуске стенда (npm start)", type: "" };
-  return call(`lk/shop${path}`, opts);
+  if (mode === "server") return call(`lk/shop${path}`, opts);
+  if (!shopReady()) return { status: 0, ok: false, json: null, text: "Оформление внутри ЛК недоступно: нет посредника (npm start или Worker)", type: "" };
+  try {
+    let r = await call(`${worker()}/shop${path}`, { ...opts, headers: { "x-lk-sid": await workerSession() } });
+    if (r.status === 401 && r.json?.error === "session") {
+      // сессия магазина истекла (час без обращений): открываем заново, один раз
+      r = await call(`${worker()}/shop${path}`, { ...opts, headers: { "x-lk-sid": await workerSession(true) } });
+    }
+    return r;
+  } catch (e) {
+    return { status: 0, ok: false, json: null, text: String(e.message ?? e), type: "" };
+  }
+}
+
+/** Настройки, которые отдаёт посредник (ключ поиска адреса Google): стенд или Worker. */
+export async function shopConfig() {
+  try {
+    const r = mode === "server" ? await call("lk/config") : worker() ? await call(`${worker()}/config`) : null;
+    return r?.json ?? {};
+  } catch {
+    return {};
+  }
 }
 
 /** Вход: логин и пароль уходят только на сервер Coral Club (через стенд или напрямую). */
@@ -117,4 +167,5 @@ export async function logout() {
   if (token) await call(`${API}/auth/session`, { method: "DELETE", bearer: token });
   token = null;
   save(null);
+  saveSid(null);
 }

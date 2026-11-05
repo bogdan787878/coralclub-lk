@@ -71,8 +71,29 @@ LK_HOST=0.0.0.0 npm start
 
 Как это работает технически:
 - Магазин принимает методы чек-аута (`/sv-api/*`) только по своей сессии. Поэтому страница ходит к стенду (`/lk/shop/...`), а `server.mjs` проксирует их в магазин с авторизованной сессией этого входа. Пропускаются только `init, delivery, payments, pickpoints, profiles, receivers, promo, getOrder, order, checkLocality, getProfilePrice`, `shop/shop_basket.php`, `getLocation` и страница оплаты `/order/payment/<id>/`; POST разрешён только на `/sv-api/order`.
-- Работает при запуске `npm start`. На GitHub Pages (прямой режим) сессии магазина нет, там остаётся запасной путь: страница оформления магазина по ссылке из `web_views/checkout_new`.
+- Работает при запуске `npm start` и на GitHub Pages через Cloudflare Worker (раздел ниже). Без того и другого остаётся запасной путь: страница оформления магазина по ссылке из `web_views/checkout_new`.
 - Ключ поиска адреса Google (браузерный, с ограничением по HTTP-референту): `GOOGLE_PLACES_KEY` в окружении или в `.env.local` (в git не попадает). Для `http://localhost:3300/*` его нужно разрешить в консоли Google. Без ключа адрес вводится вручную.
 - Заказ создаётся только по нажатию «Оформить заказ» в окне подтверждения.
 - Не сделано: карта на выбор точки (пункты выдачи только списком), выбор региона из списка, оплата PayPal и Google Pay.
 - Сырые ответы чек-аута для отладки: `window.__shopDebug` (`init`, `delivery`, `payments`, `totals`, `pickpoints`).
+
+## Посредник для GitHub Pages (Cloudflare Worker)
+
+Магазин принимает методы чек-аута только по своей сессии (cookie `PHPSESSID`, `HttpOnly`), а браузер с `github.io` не может её ни получить, ни передать. Проверено: ответ магазина на логин не содержит идентификатор сессии, а заголовок `PHPSESSID` вместо cookie магазин не принимает. Поэтому сессию держит Worker (`worker/worker.mjs`).
+
+**Пароль Worker не нужен.** Сессия участника открывается по токену API кабинета. Проверено на реальной сессии: `GET /web_views/checkout_new` возвращает `{ url, access_token }`; запрос к `url` с заголовком `x-access-token: <access_token>` открывает авторизованную сессию магазина (остальные десять способов передать токен не работают). Корзина участника из API при этом видна в корзине магазина (`/sv-api/order` показывает её `QUANTITY`).
+
+Как работает:
+- `POST /session` с `Authorization: Bearer <токен API>` → Worker открывает сессию магазина, кладёт её в KV и отдаёт случайный `sid`;
+- `GET|POST /shop/<путь>` с `X-Lk-Sid` → Worker ходит в магазин с этой сессией; пропускаются те же пути, что и в `server.mjs`, POST только на `/sv-api/order`;
+- `GET /config` → ключ поиска адреса Google (секрет `GOOGLE_PLACES_KEY`, если задан).
+Запросы принимаются только с адресов из `ALLOWED_ORIGINS`. Сессия живёт час с последнего обращения. Токены, ссылки и значения кук не логируются.
+
+Развернуть (нужен аккаунт Cloudflare, из каталога `worker/`):
+```bash
+npx wrangler login
+npx wrangler kv namespace create SESSIONS      # выданный id подставьте в wrangler.toml
+npx wrangler secret put GOOGLE_PLACES_KEY      # по желанию, поиск адреса Google
+npx wrangler deploy                            # напечатает адрес вида https://coral-lk-checkout.<аккаунт>.workers.dev
+```
+Затем впишите этот адрес в `docs/config.json` (`"shopWorker"`) и запушьте. В `wrangler.toml` в `ALLOWED_ORIGINS` должен быть адрес вашего GitHub Pages (по умолчанию `https://bogdan787878.github.io`); для проверки с компьютера добавьте `http://localhost:3300`.

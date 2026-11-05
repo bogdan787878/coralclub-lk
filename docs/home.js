@@ -73,7 +73,7 @@ function problem(r) {
   return j?.message || (r.status === 401 ? "Нужно войти заново" : r.status === 403 ? "Нет доступа" : `Ошибка ${r.status || "сети"}`);
 }
 
-export function createHome(root, api, { onLogout, shopRequest, shopReady } = {}) {
+export function createHome(root, api, { onLogout, shopRequest, shopReady, shopConfig } = {}) {
   const state = { profile: null, currency: "RUB", balance: null, points: null, pointsLoaded: false, months: [], orders: null, bonus: null, bonusMonths: 6, bonusShown: 8, ordersShown: 5, dash: null, member: null, metricsJson: null, transfer: null, transferShown: 8, struct: null, path: [] };
 
   root.innerHTML = `
@@ -1183,6 +1183,7 @@ export function createHome(root, api, { onLogout, shopRequest, shopReady } = {})
   const checkout = createCheckout($("#h-checkout"), {
     shopRequest,
     shopReady,
+    shopConfig,
     shop,
     who: () => {
       const p = state.profile ?? {};

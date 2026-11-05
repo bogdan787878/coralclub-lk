@@ -3,6 +3,7 @@
   "applicationToken": "1ec82603-8332-6dd2-9af6-4309c012a93e",
   "deliveryId": "RU",
   "language": "ru",
+  "shopWorker": "",
   "sessionPath": "/restApi/proxyCC4/auth/session",
   "endpoints": [
     {

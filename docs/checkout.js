@@ -29,7 +29,7 @@ const CHECK = `<svg class="oc-check" viewBox="0 0 28 28" aria-hidden="true"><cir
 const TICK = `<path d="M8.5 14.5l3.8 3.8 7.2-7.6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`;
 const CHEV = `<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-export function createCheckout(root, { shopRequest, shopReady, shop, who, api, P, money: lkMoney, esc, sheet, toast }) {
+export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop, who, api, P, money: lkMoney, esc, sheet, toast }) {
   const form = { fio: "", phone: "", email: "", searchText: "", picked: false, manual: false, street: "", build: "", apartment: "", zip: "", city: "", region: "", comment: "", terms: false, data: false };
   const st = {
     run: 0, mode: "courier", groups: [], payments: [], deliveryChoice: "", paymentId: "", totals: null, points: [], pointCode: "", pointsFor: "",
@@ -809,12 +809,7 @@ export function createCheckout(root, { shopRequest, shopReady, shop, who, api, P
     }
     set(`<div class="ck-page">${spinner("Готовим заказ…")}</div>`);
     // ключ поиска адреса Google отдаёт стенд (из GOOGLE_PLACES_KEY / .env.local), в репозитории его нет
-    try {
-      const c = await (await fetch("lk/config", { cache: "no-store" })).json();
-      setPlacesKey(c.placesKey);
-    } catch {
-      setPlacesKey("");
-    }
+    setPlacesKey((await shopConfig()).placesKey);
     const w = who();
     Object.assign(form, { fio: w.fio ?? "", phone: w.phone ?? "", email: w.email ?? "" });
     const b = await ensureBasket(lines);
