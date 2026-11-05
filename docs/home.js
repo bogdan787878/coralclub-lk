@@ -2,6 +2,7 @@
 // быстрые действия и виджеты показателей. Данные из API кабинета (CC4).
 import { metricsMessage, rankRu, renderMetrics } from "./metrics.js";
 import { PRE, RANKS } from "./ranks.js";
+import { attachHints } from "./hint.js";
 import { computeTasks, lineLabel, personName, rankName } from "./tasks.js";
 
 const P = "/restApi/proxyCC4";
@@ -925,23 +926,20 @@ export function createHome(root, api) {
       leaving: "Кандидаты без первого заказа: на заказ осталось не больше 7 дней или срок уже вышел, потом их удалят. Крупная цифра — ваша первая линия, в подписи — вся структура.",
       dirs: "Директора в ваших поколениях. К 1-му поколению относятся директора, над которыми нет других директоров. «Всего» — во всех поколениях.",
       bd: "Дни рождения участников вашей структуры в ближайшие 7 дней. Дата видна только у тех, кто разрешил её показывать.",
+      stale: "Участники, которые не делали заказов от 3 до 11 месяцев: их ещё можно вернуть. Крупная цифра — ваша первая линия, в подписи — вся структура. Кандидатов здесь нет.",
+      near: "Дистрибьюторы с групповым объёмом ниже 500 (порог директора) или от 500 до 750 (порог экстрабонуса). Крупная цифра — ваша первая линия, в подписи — вся структура.",
     };
-    const tile = (key, title, big, sub) => `<article class="mcard mtap" data-k="${key}" role="button" tabindex="0"><div class="mhead"><h3>${esc(title)}</h3><button class="mi" type="button" aria-label="Что это за показатель" aria-expanded="false">?</button></div><p class="mnote" hidden>${esc(INFO_T[key])}</p><div class="mval"><p class="mbig">${esc(big)}</p><p class="msub">${esc(sub)}</p></div></article>`;
+    const tile = (key, title, big, sub) => `<article class="mcard mtap" data-k="${key}" role="button" tabindex="0"><div class="mhead"><h3>${esc(title)}</h3><button class="mi" type="button" aria-label="Что это за показатель" aria-expanded="false" data-hint="${esc(INFO_T[key])}">?</button></div><div class="mval"><p class="mbig">${esc(big)}</p><p class="msub">${esc(sub)}</p></div></article>`;
     tasksRoot.hidden = false;
     tasksRoot.innerHTML = `<div class="mtop"><h2 class="mtitle">ЗАДАЧИ</h2></div><div class="mgrid tcar">${[
       tile("fresh", "Новые участники", String(t.mine(t.fresh).length), `в 1-й линии за ${mon} · в структуре ${t.fresh.length}`),
       tile("leaving", "Уходящие участники", String(t.mine(t.leaving).length), `в 1-й линии · в структуре ${t.leaving.length}`),
       tile("dirs", "Директора", String(gen1), `в 1-м поколении · во всех ${t.directors.length}`),
+      tile("stale", "Давно не заказывали", String(t.mine(t.stale).length), `в 1-й линии · в структуре ${t.stale.length}`),
+      tile("near", "Не хватает до порога", String(t.mine([...t.to500, ...t.to750]).length), `в 1-й линии · в структуре ${t.to500.length + t.to750.length}`),
       tile("bd", "Дни рождения", String(t.birthdays.length), "в ближайшие 7 дней"),
     ].join("")}</div>`;
-    tasksRoot.querySelectorAll(".mi").forEach((b) => {
-      b.onclick = (e) => {
-        e.stopPropagation();
-        const note = b.closest(".mcard").querySelector(".mnote");
-        note.hidden = !note.hidden;
-        b.setAttribute("aria-expanded", String(!note.hidden));
-      };
-    });
+    attachHints(tasksRoot);
     const sub = (m, tail) => [lineLabel(m), tail].filter(Boolean).join(" · ");
     const open = {
       fresh: () =>
@@ -965,6 +963,28 @@ export function createHome(root, api) {
           "Кандидаты без первого заказа: до удаления осталось не больше 7 дней или срок уже вышел.",
         ),
       dirs: () => sheetPeople("Директора", [{ label: "В ваших поколениях", rows: t.directors.map((m) => ({ name: personName(m), sub: sub(m, rankName(m.rank)), side: `${m.gen}-е пок.` })) }], "Директоров в ваших поколениях пока нет."),
+      stale: () =>
+        sheetPeople(
+          "Давно не заказывали",
+          [
+            { label: "Мои", rows: t.mine(t.stale) },
+            { label: "В структуре", rows: t.stale },
+          ].map((g) => ({ label: g.label, rows: g.rows.map((m) => ({ name: personName(m), sub: sub(m, m.position === "CONSUMER" ? "потребитель" : "дистрибьютор"), side: `${count(m.monthsWithoutPoints, ["месяц", "месяца", "месяцев"])} без заказа` })) })),
+          "Сейчас таких участников нет.",
+          "Не заказывали от 3 до 11 месяцев. Сверху те, кого проще вернуть.",
+        ),
+      near: () => {
+        const row = (th) => (m) => ({ name: personName(m), sub: sub(m, `ГО ${fmt(Number(m.volumeGroup))}`), side: `не хватает ${fmt(th - Number(m.volumeGroup))}` });
+        sheetPeople(
+          "Не хватает до порога",
+          [
+            { label: "До 500", rows: t.to500.map(row(500)) },
+            { label: "До 750", rows: t.to750.map(row(750)) },
+          ],
+          "Сейчас ни у кого нет объёма в этом диапазоне.",
+          "Групповой объём (ГО) за текущий месяц: 500 — порог директора, 750 — порог экстрабонуса.",
+        );
+      },
       bd: () => sheetPeople("Дни рождения", [{ label: "На этой неделе", rows: t.birthdays.map((m) => ({ name: personName(m), sub: lineLabel(m), side: m.in === 0 ? "сегодня" : `${m.when.getDate()} ${SHORT_MONTHS[m.when.getMonth()]}` })) }], "На этой неделе дней рождения нет."),
     };
     tasksRoot.querySelectorAll(".mtap").forEach((el) => {

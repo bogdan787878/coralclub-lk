@@ -433,3 +433,7 @@ body:has(#dash-view:not([hidden])) { background: #f1f3f4; }
 #tasks .tcar::-webkit-scrollbar { display: none; }
 #tasks .tcar .mcard { flex: 0 0 46%; scroll-snap-align: start; }
 @media (min-width: 560px) { #tasks .tcar .mcard { flex-basis: 200px; } }
+
+/* подсказки поверх страницы */
+.hint-pop { position: fixed; z-index: 60; background: #2b2b2e; color: #fff; border-radius: 12px; padding: 10px 12px; font-size: .8rem; line-height: 1.15rem; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); pointer-events: auto; }
+.mi[aria-expanded="true"] { background: #2b2b2e; color: #fff; }

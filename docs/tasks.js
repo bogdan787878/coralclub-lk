@@ -52,6 +52,17 @@ export function computeTasks(contact, prep, now = new Date()) {
     .filter((m) => m && m.in <= 6)
     .sort((a, b) => a.in - b.in);
 
+  // «Давно не заказывали»: не покупали от 3 до 11 месяцев, пока человека реально вернуть (кандидатов не считаем)
+  const stale = prep
+    .filter((m) => lvl(m) > 0 && m.status !== "CANDIDATE" && m.monthsWithoutPoints != null && m.monthsWithoutPoints >= 3 && m.monthsWithoutPoints < 12)
+    .sort((a, b) => a.monthsWithoutPoints - b.monthsWithoutPoints);
+
+  // «Не хватает до 500 / 750»: у дистрибьюторов с объёмом группы, но ниже порога директора (500) или экстрабонуса (750)
+  const go = (m) => Number(m.volumeGroup ?? 0);
+  const dist = prep.filter((m) => lvl(m) > 0 && m.position === "DISTRIBUTOR" && go(m) > 0);
+  const to500 = dist.filter((m) => go(m) < 500).sort((a, b) => go(b) - go(a));
+  const to750 = dist.filter((m) => go(m) >= 500 && go(m) < 750).sort((a, b) => go(b) - go(a));
+
   const mine = (a) => a.filter((m) => lvl(m) === 1);
-  return { fresh, leaving, directors, birthdays, mine };
+  return { fresh, leaving, directors, birthdays, stale, to500, to750, mine };
 }

@@ -6,6 +6,7 @@
 //    (месяц назван словами: «в сентябре: 122,5»), слэшей «154/500» нет;
 //  - аббревиатуры расшифрованы, у каждой метрики есть пояснение (кнопка «?»);
 //  - для ГО подсказка про долю личного объёма: у Екатерины это рабочий красный флаг.
+import { attachHints } from "./hint.js";
 const MONTHS_NOM = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
 const MONTHS_PREP = ["январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре"];
 const MONTHS_SHORT = ["янв.", "февр.", "март", "апр.", "май", "июнь", "июль", "авг.", "сент.", "окт.", "нояб.", "дек."];
@@ -37,7 +38,7 @@ const INFO = {
 };
 
 function tile(key, title, body) {
-  return `<article class="mcard" data-k="${key}"><div class="mhead"><h3>${esc(title)}</h3><button class="mi" type="button" aria-label="Что это за показатель" aria-expanded="false">?</button></div><p class="mnote" hidden>${esc(INFO[key])}</p><div class="mval">${body}</div></article>`;
+  return `<article class="mcard" data-k="${key}"><div class="mhead"><h3>${esc(title)}</h3><button class="mi" type="button" aria-label="Что это за показатель" aria-expanded="false" data-hint="${esc(INFO[key])}">?</button></div><div class="mval">${body}</div></article>`;
 }
 
 /* ---------- плитки: название, цифра крупно, подпись периода ---------- */
@@ -95,13 +96,7 @@ export function renderMetrics(root, json, dash = null, fetchedAt = new Date()) {
     geo.length && tileGeo(closed(geo)),
   ].filter(Boolean);
   root.innerHTML = `<div class="mtop"><h2 class="mtitle">МОИ ПОКАЗАТЕЛИ</h2></div><div class="mgrid">${tiles.join("")}</div>`;
-  root.querySelectorAll(".mi").forEach((b) => {
-    b.onclick = () => {
-      const note = b.closest(".mcard").querySelector(".mnote");
-      note.hidden = !note.hidden;
-      b.setAttribute("aria-expanded", String(!note.hidden));
-    };
-  });
+  attachHints(root);
 }
 
 export function metricsMessage(root, text) {
