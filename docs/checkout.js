@@ -8,7 +8,9 @@ import { addressSearchEnabled, newSession, resolveAddress, resolveStreet, setPla
 import { countryName, getCountry, onCountryRequest, rememberCountries, setCountry } from "./country.js";
 import { deliverySlots, isMoscow, slotRegion } from "./slots.js";
 
-const CASHLIKE = /налич|при получении/i;
+// В ЛК только онлайн-оплата: наличные и оплата курьером не предлагаются, шлюз оплаты открывается по стране.
+const CASHLIKE = /налич|при получении|наложен|cash/i;
+const onlineOnly = (list) => (Array.isArray(list) ? list.filter((p) => !CASHLIKE.test(p?.NAME ?? "")) : list);
 const CARD = /карт|card/i;
 
 /** Вложенные параметры в виде a[b]=c: так их шлёт сам чек-аут магазина. */
@@ -107,7 +109,9 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
     const r = await sv("/delivery", { COUNTRY: country(), CITY: form.city.trim(), AREA: form.region.trim() || form.city.trim() });
     if (key !== deliveryKey()) return;
     window.__shopDebug = { ...(window.__shopDebug ?? {}), delivery: r.json };
-    st.groups = (Array.isArray(r.json?.result) ? r.json.result : []).map((g) => ({ ...g, ITEMS: Array.isArray(g.ITEMS) ? g.ITEMS : [] })).filter((g) => g.ITEMS.length);
+    // магазин сам сообщает допустимые оплаты у способа доставки (PAYSYSTEMS): убираем те, где только наличные
+    const hasOnline = (i) => !Array.isArray(i.PAYSYSTEMS) || i.PAYSYSTEMS.length === 0 || onlineOnly(i.PAYSYSTEMS).length > 0;
+    st.groups = (Array.isArray(r.json?.result) ? r.json.result : []).map((g) => ({ ...g, ITEMS: (Array.isArray(g.ITEMS) ? g.ITEMS : []).filter(hasOnline) })).filter((g) => g.ITEMS.length);
     st.deliveryErr = st.groups.length ? "" : r.json?.error || "Для этого адреса нет способов доставки.";
     st.deliveryFor = key;
     if (!items().length && !st.groups.length) {
@@ -133,7 +137,7 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
     const r = await sv("/payments", { deliveryId: id, COUNTRY: country(), CITY: form.city.trim(), AREA: form.region.trim() || form.city.trim() });
     if (key !== `${deliveryId()}|${place()}`) return;
     window.__shopDebug = { ...(window.__shopDebug ?? {}), payments: r.json };
-    st.payments = Array.isArray(r.json?.result) ? r.json.result : [];
+    st.payments = onlineOnly(Array.isArray(r.json?.result) ? r.json.result : []);
     // как у чек-аута магазина: способ, которым участник платил в прошлый раз (из /init), иначе первый в списке
     if (!st.payments.some((p) => p.ID === st.paymentId)) st.paymentId = st.payments.find((p) => p.ID === st.lastPayment)?.ID ?? st.payments[0]?.ID ?? "";
     st.paymentsFor = key;
