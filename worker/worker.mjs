@@ -80,7 +80,9 @@ async function shopCall(request, env, rest, url) {
   }
   const up = await fetch(`${host}${rest}${url.search}`, init);
   storeCookies(jar, up);
-  await env.SESSIONS.put(sid, JSON.stringify({ jar: [...jar], host }), { expirationTtl: TTL });
+  // пишем в KV только если куки изменились: бесплатный тариф даёт мало записей в сутки
+  const after = JSON.stringify({ jar: [...jar], host });
+  if (after !== JSON.stringify({ jar: pairs, host })) await env.SESSIONS.put(sid, after, { expirationTtl: TTL });
   const text = stripScript(await up.text());
   return new Response(text, { status: up.status, headers: { "content-type": up.headers.get("content-type") ?? "text/plain", ...cors(request, env) } });
 }
