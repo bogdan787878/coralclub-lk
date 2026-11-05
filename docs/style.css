@@ -427,3 +427,9 @@ body:has(#dash-view:not([hidden])) { background: #f1f3f4; }
 .mtap:active { transform: scale(.98); }
 #tasks { margin-top: 20px; }
 .sheet-form .h-list { margin: 0; }
+
+/* задачи: карусель, следующая плитка выглядывает справа */
+#tasks .tcar { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-left: 16px; margin: 0 -16px; padding: 2px 16px 6px; scrollbar-width: none; }
+#tasks .tcar::-webkit-scrollbar { display: none; }
+#tasks .tcar .mcard { flex: 0 0 46%; scroll-snap-align: start; }
+@media (min-width: 560px) { #tasks .tcar .mcard { flex-basis: 200px; } }

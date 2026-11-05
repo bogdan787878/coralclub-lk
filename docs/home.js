@@ -919,14 +919,29 @@ export function createHome(root, api) {
     }
     const mon = MONTHS_RU[new Date().getMonth()];
     const gen1 = t.directors.filter((d) => d.gen === 1).length;
-    const tile = (key, title, big, sub) => `<article class="mcard mtap" data-k="${key}" role="button" tabindex="0"><div class="mhead"><h3>${esc(title)}</h3></div><div class="mval"><p class="mbig">${esc(big)}</p><p class="msub">${esc(sub)}</p></div></article>`;
+    // подписи без слэшей (кастдев Карины: «4 / 18» читали как «4 в этом месяце, 18 в прошлом»); у каждой цифры «относительно чего» и пояснение по «?»
+    const INFO_T = {
+      fresh: "Люди, зарегистрировавшиеся в этом месяце. Крупная цифра — ваша первая линия, в подписи — вся структура. Пока человек не сделал первый заказ, он кандидат.",
+      leaving: "Кандидаты без первого заказа: на заказ осталось не больше 7 дней или срок уже вышел, потом их удалят. Крупная цифра — ваша первая линия, в подписи — вся структура.",
+      dirs: "Директора в ваших поколениях. К 1-му поколению относятся директора, над которыми нет других директоров. «Всего» — во всех поколениях.",
+      bd: "Дни рождения участников вашей структуры в ближайшие 7 дней. Дата видна только у тех, кто разрешил её показывать.",
+    };
+    const tile = (key, title, big, sub) => `<article class="mcard mtap" data-k="${key}" role="button" tabindex="0"><div class="mhead"><h3>${esc(title)}</h3><button class="mi" type="button" aria-label="Что это за показатель" aria-expanded="false">?</button></div><p class="mnote" hidden>${esc(INFO_T[key])}</p><div class="mval"><p class="mbig">${esc(big)}</p><p class="msub">${esc(sub)}</p></div></article>`;
     tasksRoot.hidden = false;
-    tasksRoot.innerHTML = `<div class="mtop"><h2 class="mtitle">ЗАДАЧИ</h2></div><div class="mgrid">${[
-      tile("fresh", "Новые участники", `${t.mine(t.fresh).length} / ${t.fresh.length}`, "мои / в структуре"),
-      tile("leaving", "Уходящие участники", `${t.mine(t.leaving).length} / ${t.leaving.length}`, "мои / в структуре"),
-      tile("dirs", "Директора", String(gen1), `1-е поколение · всего ${t.directors.length}`),
+    tasksRoot.innerHTML = `<div class="mtop"><h2 class="mtitle">ЗАДАЧИ</h2></div><div class="mgrid tcar">${[
+      tile("fresh", "Новые участники", String(t.mine(t.fresh).length), `в 1-й линии за ${mon} · в структуре ${t.fresh.length}`),
+      tile("leaving", "Уходящие участники", String(t.mine(t.leaving).length), `в 1-й линии · в структуре ${t.leaving.length}`),
+      tile("dirs", "Директора", String(gen1), `в 1-м поколении · во всех ${t.directors.length}`),
       tile("bd", "Дни рождения", String(t.birthdays.length), "в ближайшие 7 дней"),
     ].join("")}</div>`;
+    tasksRoot.querySelectorAll(".mi").forEach((b) => {
+      b.onclick = (e) => {
+        e.stopPropagation();
+        const note = b.closest(".mcard").querySelector(".mnote");
+        note.hidden = !note.hidden;
+        b.setAttribute("aria-expanded", String(!note.hidden));
+      };
+    });
     const sub = (m, tail) => [lineLabel(m), tail].filter(Boolean).join(" · ");
     const open = {
       fresh: () =>
