@@ -2,6 +2,7 @@
 // быстрые действия и виджеты показателей. Данные из API кабинета (CC4).
 import { metricsMessage, rankRu, renderMetrics } from "./metrics.js";
 import { PRE, RANKS } from "./ranks.js";
+import { computeTasks, lineLabel, personName, rankName } from "./tasks.js";
 
 const P = "/restApi/proxyCC4";
 const tz = String(new Date().getTimezoneOffset()); // как просит API: минуты смещения, например -180
@@ -87,6 +88,7 @@ export function createHome(root, api) {
       <a class="h-link" href="#/orders"><span class="h-link-ic" aria-hidden="true">${ICON.bag}</span><span class="h-link-text"><b>История заказов</b><span>Все заказы и их статусы</span></span></a>
       <a class="h-link" href="#/structure"><span class="h-link-ic" aria-hidden="true">${ICON.team}</span><span class="h-link-text"><b>Моя структура</b><span>Кто в вашей команде</span></span></a>
       <section class="home-metrics metrics" id="metrics"></section>
+      <section class="home-metrics metrics" id="tasks" hidden></section>
     </div>
     <div id="h-detail" hidden>
       <header class="h-dhead"><a class="h-back" href="#/" aria-label="Назад">${ICON.back}</a><h2 id="h-dtitle"></h2></header>
@@ -120,6 +122,7 @@ export function createHome(root, api) {
 
   const $ = (s) => root.querySelector(s);
   const metricsRoot = $("#metrics");
+  const tasksRoot = $("#tasks");
 
   /* ---------- нижний лист ---------- */
   const sheet = $("#sheet");
@@ -882,6 +885,88 @@ export function createHome(root, api) {
     mark();
   }
 
+
+  /* ---------- задачи: новые, уходящие, директора, дни рождения ---------- */
+  const SHORT_MONTHS = ["янв.", "февр.", "марта", "апр.", "мая", "июня", "июля", "авг.", "сент.", "окт.", "нояб.", "дек."];
+  const dayWord = (n) => count(n, ["день", "дня", "дней"]);
+
+  function sheetPeople(title, groups, empty, hint = "") {
+    const box = document.createElement("div");
+    box.className = "sheet-form";
+    const row = (r) => `<li class="h-row"><div class="h-main"><b>${esc(r.name)}</b><span>${esc(r.sub)}</span></div>${r.side ? `<span class="h-sum">${esc(r.side)}</span>` : ""}</li>`;
+    let cur = 0;
+    const paint = () => {
+      const g = groups[cur];
+      box.innerHTML = `${hint ? `<p class="muted">${esc(hint)}</p>` : ""}${groups.length > 1 ? `<div class="seg" role="group">${groups.map((x, i) => `<button type="button" data-i="${i}" class="${i === cur ? "on" : ""}">${esc(x.label)} · ${x.rows.length}</button>`).join("")}</div>` : ""}${g.rows.length ? `<ul class="h-list">${g.rows.map(row).join("")}</ul>` : `<p class="muted">${esc(empty)}</p>`}`;
+      box.querySelectorAll(".seg button").forEach((b) => {
+        b.onclick = () => {
+          cur = Number(b.dataset.i);
+          paint();
+        };
+      });
+    };
+    paint();
+    openSheet(title, box);
+  }
+
+  function paintTasks() {
+    const t = state.tasks;
+    if (!t) return;
+    if (t.error) {
+      tasksRoot.hidden = false;
+      tasksRoot.innerHTML = `<div class="mtop"><h2 class="mtitle">ЗАДАЧИ</h2></div><p class="muted">${esc(t.error)}</p>`;
+      return;
+    }
+    const mon = MONTHS_RU[new Date().getMonth()];
+    const gen1 = t.directors.filter((d) => d.gen === 1).length;
+    const tile = (key, title, big, sub) => `<article class="mcard mtap" data-k="${key}" role="button" tabindex="0"><div class="mhead"><h3>${esc(title)}</h3></div><div class="mval"><p class="mbig">${esc(big)}</p><p class="msub">${esc(sub)}</p></div></article>`;
+    tasksRoot.hidden = false;
+    tasksRoot.innerHTML = `<div class="mtop"><h2 class="mtitle">ЗАДАЧИ</h2></div><div class="mgrid">${[
+      tile("fresh", "Новые участники", `${t.mine(t.fresh).length} / ${t.fresh.length}`, "мои / в структуре"),
+      tile("leaving", "Уходящие участники", `${t.mine(t.leaving).length} / ${t.leaving.length}`, "мои / в структуре"),
+      tile("dirs", "Директора", String(gen1), `1-е поколение · всего ${t.directors.length}`),
+      tile("bd", "Дни рождения", String(t.birthdays.length), "в ближайшие 7 дней"),
+    ].join("")}</div>`;
+    const sub = (m, tail) => [lineLabel(m), tail].filter(Boolean).join(" · ");
+    const open = {
+      fresh: () =>
+        sheetPeople(
+          "Новые участники",
+          [
+            { label: "Мои", rows: t.mine(t.fresh) },
+            { label: "В структуре", rows: t.fresh },
+          ].map((g) => ({ label: g.label, rows: g.rows.map((m) => ({ name: personName(m), sub: sub(m, m.status === "CANDIDATE" ? "кандидат" : "с заказом"), side: m.registrationDays != null ? `рег. ${dayWord(m.registrationDays)} назад` : "" })) })),
+          "Новых участников в этом месяце нет.",
+          `Зарегистрировались в этом месяце (${mon}). Пока без заказа они кандидаты.`,
+        ),
+      leaving: () =>
+        sheetPeople(
+          "Уходящие участники",
+          [
+            { label: "Мои", rows: t.mine(t.leaving) },
+            { label: "В структуре", rows: t.leaving },
+          ].map((g) => ({ label: g.label, rows: g.rows.map((m) => ({ name: personName(m), sub: sub(m, "кандидат"), side: m.left > 0 ? `до удаления ${dayWord(m.left)}` : m.left === 0 ? "последний день" : "срок вышел" })) })),
+          "Сейчас никто не уходит.",
+          "Кандидаты без первого заказа: до удаления осталось не больше 7 дней или срок уже вышел.",
+        ),
+      dirs: () => sheetPeople("Директора", [{ label: "В ваших поколениях", rows: t.directors.map((m) => ({ name: personName(m), sub: sub(m, rankName(m.rank)), side: `${m.gen}-е пок.` })) }], "Директоров в ваших поколениях пока нет."),
+      bd: () => sheetPeople("Дни рождения", [{ label: "На этой неделе", rows: t.birthdays.map((m) => ({ name: personName(m), sub: lineLabel(m), side: m.in === 0 ? "сегодня" : `${m.when.getDate()} ${SHORT_MONTHS[m.when.getMonth()]}` })) }], "На этой неделе дней рождения нет."),
+    };
+    tasksRoot.querySelectorAll(".mtap").forEach((el) => {
+      el.onclick = () => open[el.dataset.k]();
+      el.onkeydown = (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), open[el.dataset.k]());
+    });
+  }
+  async function loadTasks() {
+    const now = new Date();
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const [c, p] = await Promise.all([api(`${P}/personal-new/structure/reports/contact?showInactive=false`), api(`${P}/personal-new/structure/reports?month=${ym}&type=PRep`)]);
+    const contact = c.json?.data?.structure;
+    const prep = p.json?.data?.structure;
+    state.tasks = c.ok && p.ok && Array.isArray(contact) && Array.isArray(prep) ? computeTasks(contact, prep, now) : { error: `Задачи недоступны: ${problem(c.ok ? p : c)}` };
+    paintTasks();
+  }
+
   /** Показатели: ответ метрик и дашборд приходят в любом порядке, плитки перерисовываются по обоим. */
   function paintMetrics() {
     if (state.metricsJson) renderMetrics(metricsRoot, state.metricsJson, state.dash, state.metricsAt ?? new Date());
@@ -931,7 +1016,8 @@ export function createHome(root, api) {
       else metricsMessage(metricsRoot, met.status === 403 ? "Показатели недоступны для этого аккаунта (403)." : `Не удалось получить показатели: ${problem(met)}`);
       return met;
     });
-    const [chk, mon, met] = await Promise.all([chkJob, monJob, metJob, dashJob, memJob]);
+    const taskJob = loadTasks();
+    const [chk, mon, met] = await Promise.all([chkJob, monJob, metJob, dashJob, memJob, taskJob]);
     return { chk, mon, met };
   }
 

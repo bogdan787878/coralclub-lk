@@ -421,3 +421,9 @@ body:has(#dash-view:not([hidden])) { background: #f1f3f4; }
 .rk-list li.ok .rk-box { background: #2f9e6b; border-color: #2f9e6b; }
 .rk-goal { font-size: .78rem; gap: 6px; }
 .rk-goal span { min-width: 0; }
+
+/* задачи: плитки открывают списки */
+.mtap { cursor: pointer; }
+.mtap:active { transform: scale(.98); }
+#tasks { margin-top: 20px; }
+.sheet-form .h-list { margin: 0; }
