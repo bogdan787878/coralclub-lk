@@ -7,6 +7,7 @@ import { computeTasks, lineLabel, personName, rankName } from "./tasks.js";
 import { createShop } from "./shop.js";
 import { createCheckout } from "./checkout.js";
 import { mountCountryMenu } from "./country.js";
+import { ensureLayout, openLayoutCart } from "./layout-bridge.js";
 
 const P = "/restApi/proxyCC4";
 const tz = String(new Date().getTimezoneOffset()); // как просит API: минуты смещения, например -180
@@ -73,7 +74,7 @@ function problem(r) {
   return j?.message || (r.status === 401 ? "Нужно войти заново" : r.status === 403 ? "Нет доступа" : `Ошибка ${r.status || "сети"}`);
 }
 
-export function createHome(root, api, { onLogout, shopRequest, shopReady, shopConfig } = {}) {
+export function createHome(root, api, { onLogout, shopRequest, shopReady, shopConfig, useLayout = () => false } = {}) {
   const state = { profile: null, currency: "RUB", balance: null, points: null, pointsLoaded: false, months: [], orders: null, bonus: null, bonusMonths: 6, bonusShown: 8, ordersShown: 5, dash: null, member: null, metricsJson: null, transfer: null, transferShown: 8, struct: null, path: [] };
 
   root.innerHTML = `
@@ -1139,12 +1140,23 @@ export function createHome(root, api, { onLogout, shopRequest, shopReady, shopCo
   function route() {
     const page = { "#/wallet": "bonus", "#/bonus": "bonus", "#/profile": "profile", "#/orders": "orders", "#/transfer": "transfer", "#/structure": "structure", "#/checkout": "checkout" }[location.hash] ?? "";
     // нижнее меню: главная (магазин), каталог, корзина, избранное, профиль (кабинет)
-    const tab = page ? "" : { "#/catalog": "catalog", "#/cart": "cart", "#/fav": "fav", "#/me": "me" }[location.hash] ?? "shop";
+    let tab = page ? "" : { "#/catalog": "catalog", "#/cart": "cart", "#/fav": "fav", "#/me": "me" }[location.hash] ?? "shop";
+    // общее меню и корзина из Layout: корзина там выдвижная, своя страница корзины не нужна
+    const layout = state.ready ? ensureLayout({ enabled: useLayout, onCartChanged: () => shop.refreshCart() }) : null;
+    if (layout && tab === "cart") {
+      tab = "shop";
+      history.replaceState(null, "", "#/");
+      openLayoutCart();
+    }
     $("#h-main").hidden = tab !== "me";
     $("#h-shopwrap").hidden = !["shop", "catalog", "cart", "fav"].includes(tab);
     $("#country-detail").hidden = page !== "checkout"; // страна сквозная, кроме профиля и страниц кабинета
-    $("#tabbar").hidden = Boolean(page);
-    document.body.classList.toggle("has-tabbar", !page);
+    $("#tabbar").hidden = Boolean(page) || Boolean(layout);
+    document.body.classList.toggle("has-tabbar", !page && !layout);
+    if (layout) {
+      layout.setAttribute("parts", page ? "" : "tabbar");
+      layout.setAttribute("active", { shop: "home", catalog: "catalog", fav: "fav", me: "me" }[tab] ?? "");
+    }
     root.querySelectorAll("#tabbar a").forEach((a) => a.classList.toggle("on", a.dataset.tab === tab));
     if (state.ready && !$("#h-shopwrap").hidden) shop.show(tab);
     $("#h-detail").hidden = !page;

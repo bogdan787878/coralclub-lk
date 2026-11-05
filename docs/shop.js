@@ -3,6 +3,7 @@
 // Заказ не создаётся из этого файла: «Оформить» открывает страницу оформления магазина (web_views/checkout_new).
 // Структуры ответов в описании API не заданы, поэтому поля читаются осторожно (см. normalize) и сырой ответ
 // можно посмотреть в консоли: window.__shopDebug.
+import { cartChangedHere } from "./layout-bridge.js";
 
 /** Продукты раздела «Гидратация» российского магазина (coralclub.ru/shop/hydration/). Названия и фото берутся из API;
  *  здесь они запасные, на случай если каталог не ответил. */
@@ -178,6 +179,7 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount,
       cart = next;
       onCount?.(count());
     } else await refreshCart();
+    cartChangedHere();
     toast("Добавлено в корзину");
     if (btn) {
       btn.classList.add("done");
@@ -198,6 +200,7 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount,
           ? await api(`${P}/basket/${code}/${memberId()}`, { method: "DELETE" })
           : await api(`${P}/basket/decrease`, { method: "POST", body: { code, quantity: 1, memberId: memberId() } });
     if (!r.ok) return toast(`Не получилось изменить корзину: ${problem(r)}`, true);
+    cartChangedHere();
     await refreshCart();
     if (state.tab === "cart") renderCart();
   }
@@ -205,6 +208,7 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount,
   async function removeItem(code) {
     const r = await api(`${P}/basket/${code}/${memberId()}`, { method: "DELETE" });
     if (!r.ok) return toast(`Не удалось удалить: ${problem(r)}`, true);
+    cartChangedHere();
     await refreshCart();
     renderCart();
   }

@@ -5,6 +5,14 @@
 // Прямой режим можно включить и локально: добавьте ?direct=1 к адресу.
 export const API = "https://api.coral.club/api/v1";
 const KEY = "lk_direct_token";
+/** Только для разработки на localhost: адрес мока API (ключ sessionStorage lk_cc4_base, как в @coral/api). */
+const apiBase = () => {
+  try {
+    return (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && sessionStorage.getItem("lk_cc4_base")) || API;
+  } catch {
+    return API;
+  }
+};
 
 let mode = "server";
 let cfg = { applicationToken: "", deliveryId: "RU", language: "ru", shopWorker: "" };
@@ -82,7 +90,7 @@ export const currentMode = () => mode;
 export async function request(path, opts = {}) {
   if (mode === "server") return call(path.replace(/^\/restApi\//, "/api/"), opts);
   if (!path.startsWith("/restApi/proxyCC4/")) return { status: 0, ok: false, json: null, text: "В прямом режиме доступны только адреса /restApi/proxyCC4/…", type: "" };
-  return call(API + path.replace("/restApi/proxyCC4", ""), { ...opts, bearer: token });
+  return call(apiBase() + path.replace("/restApi/proxyCC4", ""), { ...opts, bearer: token });
 }
 
 /**
