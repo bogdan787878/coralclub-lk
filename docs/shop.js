@@ -312,26 +312,42 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount,
     });
     const known = rows.every((x) => x.p.price !== null);
     const total = rows.reduce((a, x) => a + (x.p.price ?? 0) * x.qty, 0);
+    const saving = rows.reduce((a, x) => a + (x.p.old && x.p.price !== null ? (x.p.old - x.p.price) * x.qty : 0), 0);
+    const inCart = new Set(rows.map((x) => x.p.code));
+    const recs = HYDRATION.map((h) => getP(h.code)).filter((p) => p && !inCart.has(p.code) && p.available && !p.unlisted);
+    const priceHtml = (p, qty) =>
+      p.price === null
+        ? `<span class="cp-price">Цена при оформлении</span>`
+        : `<span class="cp-price"><span class="cp-member">${esc(price(p.price, p.currency))}</span>${p.old ? ` <span class="cp-was">${esc(price(p.old, p.currency))}</span>` : ""}${p.old ? `<span class="cp-savings">Экономия ${esc(price((p.old - p.price) * qty, p.currency))}</span>` : ""}</span>`;
     set(`
       <h1 class="s-title">Корзина</h1>
+      ${saving > 0 ? `<div class="cp-banner"><p class="cp-saving"><span class="cp-dot" aria-hidden="true"></span>Вы экономите ${esc(price(saving))} на ценах участника</p></div>` : ""}
       <ul class="s-lines">${rows
         .map(
           ({ p, qty }) => `
         <li class="s-line" data-code="${p.code}">
           <span class="s-lthumb">${p.image ? `<img src="${esc(p.image)}" alt="" loading="lazy" />` : IC.bag}</span>
-          <div class="s-lmain"><h3>${esc(p.name)}</h3><p class="s-note">${p.price !== null ? esc(price(p.price, p.currency)) : "Цена при оформлении"}</p>
+          <div class="s-lmain"><h3>${esc(p.name)}</h3>${p.note ? `<p class="s-note">${esc(p.note)}</p>` : ""}${priceHtml(p, qty)}
             <div class="s-step"><button type="button" data-dec aria-label="Меньше">${qty > 1 ? IC.minus : IC.trash}</button><b>${qty}</b><button type="button" data-inc aria-label="Больше">${IC.plus}</button></div>
           </div>
           <button class="s-del" type="button" data-del aria-label="Удалить из корзины">${IC.trash}</button>
         </li>`,
         )
         .join("")}</ul>
-      <section class="s-sum">
-        <div class="s-sumrow"><span>Товаров</span><b>${count()}</b></div>
-        ${known ? `<div class="s-sumrow s-total"><span>Итого</span><b>${esc(price(total))}</b></div>` : ""}
-        <button class="btn s-go" type="button" data-go>Оформить заказ</button>
-        <p class="s-note">${ownCheckout?.() ? "Адрес, доставку и оплату выберете на следующем шаге. Заказ создаётся после вашего подтверждения." : "Доставка, оплата и промокод выбираются на странице оформления магазина. Заказ создаётся там, после вашего подтверждения."}</p>
-      </section>`);
+      ${
+        recs.length
+          ? `<section class="cp-recs" aria-label="Вам может понравиться"><h3 class="cp-recsTitle">Вам может понравиться</h3><ul class="cp-recsList">${recs
+              .map((p) => `<li class="cp-rec"><span class="cp-recImg">${p.image ? `<img src="${esc(p.image)}" alt="" loading="lazy" />` : ""}</span><span class="cp-recName">${esc(p.name)}</span><span class="cp-recPrice">${p.price !== null ? esc(price(p.price, p.currency)) : ""}${p.old ? ` <span class="cp-was">${esc(price(p.old, p.currency))}</span>` : ""}</span><button type="button" class="cp-recAdd" data-radd="${p.code}">Добавить</button></li>`)
+              .join("")}</ul></section>`
+          : ""
+      }
+      <dl class="cp-summary">
+        ${saving > 0 ? `<div class="cp-discount"><dt>Скидка участника</dt><dd>−${esc(price(saving))}</dd></div>` : ""}
+        <div><dt>Товары (${count()})</dt><dd>${known ? esc(price(total)) : "—"}</dd></div>
+        <div><dt>Доставка</dt><dd>при оформлении</dd></div>
+      </dl>
+      <button class="ck-pay" type="button" data-go>Оформить заказ</button>
+      <p class="s-note" style="text-align:center">${ownCheckout?.() ? "Адрес, доставку и оплату выберете на следующем шаге. Заказ создаётся после вашего подтверждения." : "Доставка, оплата и промокод выбираются на странице оформления магазина. Заказ создаётся там, после вашего подтверждения."}</p>`);
   }
 
   async function renderFav() {
@@ -401,6 +417,8 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount,
   /* ---------- события ---------- */
   root.addEventListener("click", (e) => {
     const t = e.target;
+    const radd = t.closest("[data-radd]");
+    if (radd) return void addToCart(Number(radd.dataset.radd), radd).then(() => renderCart());
     const cardEl = t.closest(".s-card");
     const lineEl = t.closest(".s-line");
     if (t.closest("[data-chip]")) {

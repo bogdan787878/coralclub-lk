@@ -6,6 +6,7 @@ import { attachHints } from "./hint.js";
 import { computeTasks, lineLabel, personName, rankName } from "./tasks.js";
 import { createShop } from "./shop.js";
 import { createCheckout } from "./checkout.js";
+import { mountCountryMenu } from "./country.js";
 
 const P = "/restApi/proxyCC4";
 const tz = String(new Date().getTimezoneOffset()); // как просит API: минуты смещения, например -180
@@ -100,9 +101,9 @@ export function createHome(root, api, { onLogout, shopRequest, shopReady } = {})
       <section class="home-metrics metrics" id="metrics"></section>
       <section class="home-metrics metrics" id="tasks" hidden></section>
     </div>
-    <div id="h-shop" class="shop" hidden></div>
+    <div id="h-shopwrap" hidden><div class="shop-bar"><span class="shop-brand">Coral Club</span><div id="country-shop"></div></div><div id="h-shop" class="shop"></div></div>
     <div id="h-detail" hidden>
-      <header class="h-dhead"><a class="h-back" href="#/me" aria-label="Назад">${ICON.back}<span>Назад</span></a><h2 id="h-dtitle"></h2><span class="h-dside" aria-hidden="true"></span></header>
+      <header class="h-dhead"><a class="h-back" href="#/me" aria-label="Назад">${ICON.back}<span>Назад</span></a><h2 id="h-dtitle"></h2><div class="h-dside" id="country-detail" hidden></div></header>
       <div id="h-wallet" hidden>
         <section class="h-balance" aria-label="Coral Кошелёк">
           <p class="h-amount sk" id="w-amount">—</p>
@@ -1140,11 +1141,12 @@ export function createHome(root, api, { onLogout, shopRequest, shopReady } = {})
     // нижнее меню: главная (магазин), каталог, корзина, избранное, профиль (кабинет)
     const tab = page ? "" : { "#/catalog": "catalog", "#/cart": "cart", "#/fav": "fav", "#/me": "me" }[location.hash] ?? "shop";
     $("#h-main").hidden = tab !== "me";
-    $("#h-shop").hidden = !["shop", "catalog", "cart", "fav"].includes(tab);
+    $("#h-shopwrap").hidden = !["shop", "catalog", "cart", "fav"].includes(tab);
+    $("#country-detail").hidden = page !== "checkout"; // страна сквозная, кроме профиля и страниц кабинета
     $("#tabbar").hidden = Boolean(page);
     document.body.classList.toggle("has-tabbar", !page);
     root.querySelectorAll("#tabbar a").forEach((a) => a.classList.toggle("on", a.dataset.tab === tab));
-    if (state.ready && !$("#h-shop").hidden) shop.show(tab);
+    if (state.ready && !$("#h-shopwrap").hidden) shop.show(tab);
     $("#h-detail").hidden = !page;
     $("#h-wallet").hidden = page !== "bonus";
     $("#h-orders").hidden = page !== "orders";
@@ -1184,7 +1186,7 @@ export function createHome(root, api, { onLogout, shopRequest, shopReady } = {})
     shop,
     who: () => {
       const p = state.profile ?? {};
-      return { fio: p.name || p.surname ? fio(p) : "", phone: p.phone ?? "", email: p.email ?? "", city: p.address?.city ?? "" };
+      return { id: p.id, fio: p.name || p.surname ? fio(p) : "", phone: p.phone ?? "", email: p.email ?? "", city: p.address?.city ?? "" };
     },
     api,
     P,
@@ -1193,6 +1195,8 @@ export function createHome(root, api, { onLogout, shopRequest, shopReady } = {})
     sheet: { open: openSheet, close: closeSheet },
     toast: (t, bad) => shop.toast(t, bad),
   });
+  mountCountryMenu($("#country-shop"));
+  mountCountryMenu($("#country-detail"));
   window.addEventListener("hashchange", route);
   route();
 

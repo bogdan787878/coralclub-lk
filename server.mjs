@@ -23,6 +23,14 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG = JSON.parse(await readFile(path.join(ROOT, "docs", "config.json"), "utf8"));
 const PORT = Number(process.env.LK_PORT ?? 3300);
+/** Ключ Google Places для поиска адреса: переменная окружения или строка GOOGLE_PLACES_KEY=… в .env.local (в git не попадает). */
+const PLACES_KEY =
+  process.env.GOOGLE_PLACES_KEY ??
+  (await readFile(path.join(ROOT, ".env.local"), "utf8").catch(() => ""))
+    .split("\n")
+    .map((l) => l.match(/^\s*GOOGLE_PLACES_KEY\s*=\s*(.+?)\s*$/)?.[1]?.replace(/^["']|["']$/g, ""))
+    .find(Boolean) ??
+  "";
 /** По умолчанию только этот компьютер. Для проверки с телефона в той же сети: LK_HOST=0.0.0.0 */
 const BIND = process.env.LK_HOST ?? "127.0.0.1";
 const HOST = CONFIG.upstreamHost;
@@ -210,6 +218,7 @@ const SHOP_GET = [
   /^\/sv-api\/(init|delivery|payments|pickpoints|profiles|receivers|promo|getOrder|order|checkLocality|getProfilePrice)$/,
   /^\/shop\/shop_basket\.php$/,
   /^\/restApi\/v4\/location\/getLocation$/,
+  /^\/order\/payment\/\d+(\/[^/]+)?\/?$/, // страница оплаты заказа: из неё читаем переход на страницу банка
 ];
 const SHOP_POST = [/^\/sv-api\/order$/];
 async function shopProxy(req, res, sess, url) {
@@ -271,7 +280,7 @@ http
       if (url.pathname === "/lk/state") return json(res, 200, { loggedIn: Boolean(sess.auth), token: Boolean(sess.token) });
       if (url.pathname === "/lk/config") {
         const { applicationToken, ...open } = CONFIG; // токен приложения наружу не нужен
-        return json(res, 200, open);
+        return json(res, 200, { ...open, placesKey: PLACES_KEY }); // ключ браузерный (с ограничением по референту), как в «Друге клуба»
       }
       if (url.pathname.startsWith("/lk/shop/")) return await shopProxy(req, res, sess, url);
       if (url.pathname.startsWith("/api/")) return await proxy(req, res, sess, url);
