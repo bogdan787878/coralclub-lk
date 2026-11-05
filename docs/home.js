@@ -404,6 +404,41 @@ export function createHome(root, api) {
     return { flat: false, root, byId };
   }
 
+  /* --- разметка (маркетинг-план): уровни подгружаются по клику, фильтры хранит кабинет --- */
+  const VOL = [["PersonalVolume", "ЛО"], ["GroupVolume", "ГО"], ["QualifyingVolume", "СОП"], ["QualifyingStarVolume", "СОП*"]];
+  const volKeys = () => VOL.flatMap(([b]) => ["", "Plan"].flatMap((k) => [`min${b}${k}`, `max${b}${k}`]));
+  const TYPES = [["ALL", "Все"], ["CONSUMER", "Потребители"], ["DIRECTOR", "Директора"]];
+  const rankCodes2 = ["D", "SD", "GD", "ED", "DD", "DD+", "E", "SE", "SE1", "GE", "GE1", "PE", "PE1", "PE2", "PE3", "2SE", "StE", "A", "jA", "PM", "M", "5*"];
+  const rankLabel = (c) => RANKS.find((r) => r.codes.includes(c))?.name ?? (c === "DD+" ? "Бриллиантовый+" : rankRu(c));
+  const mpNode = (it) => ({
+    id: String(it.memberId),
+    name: titleCase([it.surname, it.name].filter(Boolean).join(" ")) || `ID ${it.memberId}`,
+    avatar: it.avatar || null,
+    rank: it.rank,
+    position: it.position,
+    go: it.volumeGroup,
+    children: it.hasReferredMembers === false ? [] : undefined,
+  });
+  /** Сколько условий фильтра включено: бейдж на кнопке. */
+  function filterCount(f) {
+    if (!f) return 0;
+    let n = 0;
+    if (f.type && f.type !== "ALL") n++;
+    if (f.openRanks?.length) n++;
+    if (f.newbies) n++;
+    if (f.minRegistrationDate || f.maxRegistrationDate) n++;
+    for (const k of volKeys()) if (Number(f[k]) > 0) n++;
+    return n;
+  }
+  async function loadKids(node) {
+    const s = state.struct;
+    if (!s?.mp || node.children !== undefined) return;
+    const r = await api(`${P}/marketing-plans/levels/children?number=${s.number}&memberId=${encodeURIComponent(node.id)}`);
+    const list = r.json?.data;
+    node.children = r.ok && Array.isArray(list) ? list.map(mpNode).filter((n) => n.id !== node.id) : [];
+    if (!r.ok) node.error = problem(r);
+  }
+
   function paintStructure() {
     const s = state.struct;
     if (!s) return;
@@ -411,38 +446,122 @@ export function createHome(root, api) {
       structRoot.innerHTML = `<section class="h-card"><p class="muted">${esc(s.error)}</p></section>`;
       return;
     }
-    const { root, byId } = s;
-    // путь: выбранные участники сверху вниз (без корня), хранится в state.path
-    const path = [root, ...state.path.map((id) => byId.get(id)).filter(Boolean)];
-    const parts = [`<div class="st-me">${avatar(root, "big")}<div><b>${esc(root.name)}</b><span>${s.flat ? "Все участники" : esc(roleOf(root))}</span></div></div>`];
+    const { root } = s;
+    // путь: выбранные участники сверху вниз (корень первым)
+    const path = [root];
+    for (const id of state.path) {
+      const n = path[path.length - 1].children?.find((c) => c.id === id);
+      if (!n) break;
+      path.push(n);
+    }
+    const nf = s.mp ? filterCount(s.filter) : 0;
+    const bar = s.mp
+      ? `<div class="st-bar"><span class="muted">${nf ? `Фильтры включены: ${nf}` : "Фильтры не заданы"}</span><button type="button" class="st-filter" id="st-filter">Фильтры${nf ? `<em>${nf}</em>` : ""}</button></div>`
+      : `<p class="muted st-note">${esc(s.note ?? "")}</p>`;
+    const parts = [bar, `<div class="st-me">${avatar(root, "big")}<div><b>${esc(root.name)}</b><span>${s.flat ? "Все участники" : esc(roleOf(root))}</span></div></div>`];
     path.forEach((node, i) => {
       const kids = node.children;
       const next = path[i + 1];
+      if (kids === undefined) return void parts.push(`<p class="muted st-empty">Загружаем…</p>`);
       const label = `<p class="st-label">Подчинённых: ${kids.length}</p>`;
-      if (!kids.length) return void parts.push(`${label}<p class="muted st-empty">У этого участника пока нет подчинённых.</p>`);
+      if (!kids.length) return void parts.push(`${label}<p class="muted st-empty">${node.error ? esc(node.error) : nf ? "Никого нет по выбранным фильтрам." : "У этого участника пока нет подчинённых."}</p>`);
       if (next) {
         parts.push(`<section class="st-level">${label}<div class="st-row">${kids.map((k) => `<button type="button" class="st-chip ${k === next ? "on" : ""}" data-id="${esc(k.id)}" aria-label="${esc(k.name)}">${avatar(k, k === next ? "sel" : "")}</button>`).join("")}</div><div class="st-pick"><b>${esc(next.name)}</b><span>${esc(roleOf(next))}</span></div></section>`);
       } else {
-        parts.push(`<section class="st-level">${label}<div class="st-grid">${kids.map((k) => `<button type="button" class="st-card" data-id="${esc(k.id)}">${avatar(k)}<b>${esc(k.name)}</b><span>${esc(roleOf(k))}</span>${k.children.length ? `<em>${k.children.length} подчин.</em>` : ""}</button>`).join("")}</div></section>`);
+        parts.push(`<section class="st-level">${label}<div class="st-grid">${kids.map((k) => `<button type="button" class="st-card" data-id="${esc(k.id)}">${avatar(k)}<b>${esc(k.name)}</b><span>${esc(roleOf(k))}</span>${k.go ? `<em>ГО ${esc(fmt(Number(k.go)))}</em>` : ""}</button>`).join("")}</div></section>`);
       }
     });
     structRoot.innerHTML = `<section class="h-card st-wrap">${parts.join("")}</section>`;
+    structRoot.querySelector("#st-filter")?.addEventListener("click", sheetFilter);
     structRoot.querySelectorAll("[data-id]").forEach((b) => {
-      b.onclick = () => {
+      b.onclick = async () => {
         const id = b.dataset.id;
-        const i = state.path.length ? path.findIndex((n) => n.children.some((k) => k.id === id)) : 0;
+        const i = path.findIndex((n) => n.children?.some((k) => k.id === id));
         state.path = [...state.path.slice(0, Math.max(i, 0)), id];
+        const node = path[i]?.children?.find((k) => k.id === id);
         paintStructure();
+        if (node) {
+          await loadKids(node);
+          paintStructure();
+        }
       };
     });
   }
-  async function loadStructure() {
-    if (state.struct && !state.struct.error) return;
-    structRoot.innerHTML = `<section class="h-card"><p class="muted">Загружаем структуру…</p></section>`;
+
+  /** Окно «Фильтры»: те же поля, что в разметке кабинета; применяются к аккаунту, как на сайте. */
+  function sheetFilter() {
+    const s = state.struct;
+    const f0 = s.filter;
+    if (!f0) return openSheet("Фильтры", Object.assign(document.createElement("p"), { className: "sheet-empty", textContent: s.filterError || "Фильтры не загрузились." }));
+    const num = (k) => (Number(f0[k]) > 0 ? Number(f0[k]) : "");
+    const volTable = (kind, title) => `<details class="fl-det"><summary>${title}</summary><div class="fl-vol">${VOL.map(([b, name]) => `<span class="fl-name">${name}</span><input name="min${b}${kind}" inputmode="decimal" placeholder="от" value="${num(`min${b}${kind}`)}" /><input name="max${b}${kind}" inputmode="decimal" placeholder="до" value="${num(`max${b}${kind}`)}" />`).join("")}</div></details>`;
+    const f = form(`
+      <fieldset class="fl-set"><legend>Кого показывать</legend>
+        <div class="seg fl-seg" role="group">${TYPES.map(([v, t]) => `<button type="button" data-type="${v}" class="${(f0.type || "ALL") === v ? "on" : ""}">${t}</button>`).join("")}</div>
+      </fieldset>
+      <label>Поколений директоров<input name="directorGenerations" inputmode="numeric" value="${Number(f0.directorGenerations) || 0}" /></label>
+      <fieldset class="fl-set"><legend>Ранги</legend>
+        <div class="fl-chips">${rankCodes2.map((c) => `<label class="fl-chip"><input type="checkbox" name="rank" value="${esc(c)}" ${f0.openRanks?.includes(c) ? "checked" : ""} /><span>${esc(rankLabel(c))}</span></label>`).join("")}</div>
+      </fieldset>
+      <label class="fl-check"><input type="checkbox" name="newbies" ${f0.newbies ? "checked" : ""} /> Новички</label>
+      <fieldset class="fl-set"><legend>Дата регистрации</legend>
+        <div class="fl-two"><input type="date" name="minRegistrationDate" value="${esc(f0.minRegistrationDate ?? "")}" /><input type="date" name="maxRegistrationDate" value="${esc(f0.maxRegistrationDate ?? "")}" /></div>
+      </fieldset>
+      ${volTable("", "Объёмы: факт")}
+      ${volTable("Plan", "Объёмы: план")}
+      <button class="btn" type="submit" id="go">Применить</button>
+      <button class="btn ghost" type="button" id="reset">Сбросить</button>
+      <p class="note" role="status"></p>`);
+    let type = f0.type || "ALL";
+    f.querySelectorAll("[data-type]").forEach((b) => {
+      b.onclick = () => {
+        type = b.dataset.type;
+        f.querySelectorAll("[data-type]").forEach((x) => x.classList.toggle("on", x === b));
+      };
+    });
+    const nz = (v) => {
+      const x = Number(String(v ?? "").replace(/\s/g, "").replace(",", "."));
+      return Number.isFinite(x) && x > 0 ? x : 0;
+    };
+    const save = async (body, okText) => {
+      f.querySelector("#go").disabled = true;
+      note(f, "Сохраняем…");
+      const r = await api(`${P}/marketing-plans/calculations/filter`, { method: "PUT", body });
+      f.querySelector("#go").disabled = false;
+      if (!(r.ok && r.json?.success !== false)) return note(f, problem(r), "bad");
+      s.filter = { ...s.filter, ...body };
+      closeSheet();
+      state.path = [];
+      loadStructure(true);
+    };
+    f.onsubmit = (e) => {
+      e.preventDefault();
+      const body = {
+        type,
+        directorGenerations: Math.max(0, Math.floor(nz(f.elements.directorGenerations.value))),
+        openRanks: [...f.querySelectorAll('input[name="rank"]:checked')].map((i) => i.value),
+        newbies: f.elements.newbies.checked,
+        minRegistrationDate: f.elements.minRegistrationDate.value || undefined,
+        maxRegistrationDate: f.elements.maxRegistrationDate.value || null,
+      };
+      for (const k of volKeys()) body[k] = nz(f.elements[k].value);
+      save(body);
+    };
+    f.querySelector("#reset").onclick = () => {
+      if (!confirm("Сбросить фильтры структуры? Они сохранены в вашем аккаунте и на сайте тоже сбросятся.")) return;
+      const body = { type: "ALL", directorGenerations: Number(f0.directorGenerations) || 0, openRanks: [], newbies: false, maxRegistrationDate: null };
+      for (const k of volKeys()) body[k] = 0;
+      save(body);
+    };
+    openSheet("Фильтры", f);
+  }
+
+  async function loadStructurePRep(note) {
     const now = new Date();
     const month = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     const months = [month(now), month(new Date(now.getFullYear(), now.getMonth() - 1, 1))];
     let rep = null;
+    let lastErr = "";
     for (const m of months) {
       const r = await api(`${P}/personal-new/structure/reports?month=${m}&type=PRep`);
       const list = r.json?.data?.structure;
@@ -450,14 +569,13 @@ export function createHome(root, api) {
         rep = list;
         break;
       }
-      rep = rep ?? (r.ok ? [] : null);
-      if (!r.ok && m === months[1]) state.struct = { error: problem(r) };
+      if (!r.ok) lastErr = problem(r);
     }
-    if (!rep || !rep.length) {
-      state.struct = state.struct ?? { error: "В отчёте нет данных по структуре." };
+    if (!rep) {
+      state.struct = { error: lastErr || "В отчёте нет данных по структуре." };
       return paintStructure();
     }
-    state.struct = buildTree(rep);
+    state.struct = { ...buildTree(rep), note };
     state.path = [];
     paintStructure();
     // фото участников: из отчёта по контактам, по возможности
@@ -466,6 +584,31 @@ export function createHome(root, api) {
     if (c.ok && Array.isArray(people)) {
       const photo = new Map(people.filter((p) => p.avatar).map((p) => [String(p.memberId), p.avatar]));
       state.struct.byId.forEach((n) => (n.avatar = photo.get(n.id) ?? null));
+      paintStructure();
+    }
+  }
+
+  async function loadStructure(force = false) {
+    if (state.struct && !state.struct.error && !force) return;
+    structRoot.innerHTML = `<section class="h-card"><p class="muted">Загружаем структуру…</p></section>`;
+    const [calc, flt] = await Promise.all([api(`${P}/marketing-plans/calculations`), api(`${P}/marketing-plans/calculations/filter`)]);
+    const list = calc.json?.data;
+    if (!(calc.ok && Array.isArray(list) && list.length)) return loadStructurePRep(`Разметка недоступна (${calc.ok ? "нет расчётов" : problem(calc)}): показан отчёт по структуре без фильтров.`);
+    const number = [...list].sort((a, b) => String(b.month).localeCompare(String(a.month)) || String(b.date).localeCompare(String(a.date)))[0].number;
+    const top = await api(`${P}/marketing-plans/levels/children?number=${number}`);
+    const items = top.json?.data;
+    if (!(top.ok && Array.isArray(items))) return loadStructurePRep(`Разметка недоступна (${problem(top)}): показан отчёт по структуре без фильтров.`);
+    const p = state.profile;
+    const meId = String(p?.id ?? "");
+    const mine = items.find((it) => String(it.memberId) === meId);
+    const root = mine ? mpNode(mine) : { id: meId || "root", name: titleCase([p?.surname, p?.name].filter(Boolean).join(" ")) || "Моя структура", rank: state.member?.rank, position: p?.position, children: items.map(mpNode) };
+    root.name = titleCase(root.name);
+    if (mine) root.children = undefined;
+    state.struct = { mp: true, number, root, byId: new Map([[root.id, root]]), filter: flt.ok ? (flt.json?.data ?? null) : null, filterError: flt.ok ? "" : problem(flt) };
+    state.path = [];
+    paintStructure();
+    if (mine) {
+      await loadKids(root);
       paintStructure();
     }
   }
