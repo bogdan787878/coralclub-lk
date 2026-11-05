@@ -4,11 +4,17 @@ import { metricsMessage, rankRu, renderMetrics } from "./metrics.js";
 import { PRE, RANKS } from "./ranks.js";
 import { attachHints } from "./hint.js";
 import { computeTasks, lineLabel, personName, rankName } from "./tasks.js";
+import { createShop } from "./shop.js";
 
 const P = "/restApi/proxyCC4";
 const tz = String(new Date().getTimezoneOffset()); // как просит API: минуты смещения, например -180
 
 const ICON = {
+  tHome: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v8.500a1.500 1.500 0 0 1-1.500 1.500H15v-6H9v6H5.500A1.500 1.500 0 0 1 4 19.500z"/></svg>`,
+  tCat: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h7M3 12h5M3 18h7"/><circle cx="15.500" cy="12" r="4"/><path d="M18.500 15l3 3"/></svg>`,
+  tCart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.500 4H5l2.200 11h11l2-8H6.200"/><circle cx="9" cy="19.500" r="1.300"/><circle cx="17" cy="19.500" r="1.300"/></svg>`,
+  tHeart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.500s-7.500-4.600-9.200-9.400C1.600 7.700 3.700 4.500 7 4.500c2 0 3.400 1 5 3 1.600-2 3-3 5-3 3.300 0 5.400 3.200 4.200 6.600-1.700 4.800-9.200 9.400-9.200 9.400z"/></svg>`,
+  tUser: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4.500 20c.8-3.600 3.700-5.500 7.500-5.500s6.700 1.900 7.500 5.500"/></svg>`,
   crown: `<svg viewBox="0 0 48 40" fill="currentColor"><path d="M6 12l9 9 9-15 9 15 9-9-4 22H10L6 12z"/></svg>`,
   points: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>`,
   bonus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M9 12.5l2 2 4-5"/></svg>`,
@@ -93,8 +99,9 @@ export function createHome(root, api, { onLogout } = {}) {
       <section class="home-metrics metrics" id="metrics"></section>
       <section class="home-metrics metrics" id="tasks" hidden></section>
     </div>
+    <div id="h-shop" class="shop" hidden></div>
     <div id="h-detail" hidden>
-      <header class="h-dhead"><a class="h-back" href="#/" aria-label="Назад">${ICON.back}<span>Назад</span></a><h2 id="h-dtitle"></h2><span class="h-dside" aria-hidden="true"></span></header>
+      <header class="h-dhead"><a class="h-back" href="#/me" aria-label="Назад">${ICON.back}<span>Назад</span></a><h2 id="h-dtitle"></h2><span class="h-dside" aria-hidden="true"></span></header>
       <div id="h-wallet" hidden>
         <section class="h-balance" aria-label="Coral Кошелёк">
           <p class="h-amount sk" id="w-amount">—</p>
@@ -122,6 +129,13 @@ export function createHome(root, api, { onLogout } = {}) {
         <section class="h-card" id="t-hist" aria-label="История"></section>
       </div>
     </div>
+    <nav class="tabbar" id="tabbar" aria-label="Разделы">
+      <a href="#/" data-tab="shop">${ICON.tHome}<span>Главная</span></a>
+      <a href="#/catalog" data-tab="catalog">${ICON.tCat}<span>Каталог</span></a>
+      <a href="#/cart" data-tab="cart">${ICON.tCart}<span>Корзина</span><em class="tb-badge" id="tb-badge" hidden></em></a>
+      <a href="#/fav" data-tab="fav">${ICON.tHeart}<span>Избранное</span></a>
+      <a href="#/me" data-tab="me">${ICON.tUser}<span>Профиль</span></a>
+    </nav>
     <div class="sheet-wrap" id="sheet" hidden></div>`;
 
   const $ = (s) => root.querySelector(s);
@@ -1057,6 +1071,9 @@ export function createHome(root, api, { onLogout } = {}) {
 
   /** Каждый кусок экрана рисуется, как только пришёл его ответ: один медленный запрос не прячет остальное. */
   async function load() {
+    state.ready = true;
+    route(); // перерисовать открытую вкладку: до входа магазин не запрашивает данные
+    shop.refreshCart();
     // пока данные едут, показываем шимер; при повторной загрузке не мигаем уже нарисованным
     if (!state.metricsJson) metricsRoot.innerHTML = skTiles("МОИ ПОКАЗАТЕЛИ", 3, "mcar");
     if (!state.tasks) {
@@ -1118,7 +1135,14 @@ export function createHome(root, api, { onLogout } = {}) {
   /* ---------- переходы: главная ↔ экраны «Движение бонусов» и «История заказов» ---------- */
   function route() {
     const page = { "#/wallet": "bonus", "#/bonus": "bonus", "#/profile": "profile", "#/orders": "orders", "#/transfer": "transfer", "#/structure": "structure" }[location.hash] ?? "";
-    $("#h-main").hidden = Boolean(page);
+    // нижнее меню: главная (магазин), каталог, корзина, избранное, профиль (кабинет)
+    const tab = page ? "" : { "#/catalog": "catalog", "#/cart": "cart", "#/fav": "fav", "#/me": "me" }[location.hash] ?? "shop";
+    $("#h-main").hidden = tab !== "me";
+    $("#h-shop").hidden = !["shop", "catalog", "cart", "fav"].includes(tab);
+    $("#tabbar").hidden = Boolean(page);
+    document.body.classList.toggle("has-tabbar", !page);
+    root.querySelectorAll("#tabbar a").forEach((a) => a.classList.toggle("on", a.dataset.tab === tab));
+    if (state.ready && !$("#h-shop").hidden) shop.show(tab);
     $("#h-detail").hidden = !page;
     $("#h-wallet").hidden = page !== "bonus";
     $("#h-orders").hidden = page !== "orders";
@@ -1135,6 +1159,19 @@ export function createHome(root, api, { onLogout } = {}) {
     }
     window.scrollTo(0, 0);
   }
+  const shop = createShop($("#h-shop"), {
+    api,
+    P,
+    memberId: () => state.profile?.id ?? -1,
+    money,
+    esc,
+    sheet: { open: openSheet, close: closeSheet },
+    onCount: (n) => {
+      const b = $("#tb-badge");
+      b.textContent = n > 99 ? "99+" : String(n);
+      b.hidden = n === 0;
+    },
+  });
   window.addEventListener("hashchange", route);
   route();
 
