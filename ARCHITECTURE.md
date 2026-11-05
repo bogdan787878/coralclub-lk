@@ -63,12 +63,14 @@
 
 ## 6. Этапы
 
-1. **Подготовка**: ветка в `coral-club-shop`, прочитать `node_modules/next/dist/docs` (по `AGENTS.md` в Next 16 есть ломающие изменения), прогнать `npm run lint` и сборку как базу.
-2. **UI kit**: вынос компонентов из п.3, без изменения поведения «Друга клуба»; проверка по `/_ui-kit` и по существующим страницам.
-3. **Ядро чек-аута**: хуки, `ShopGateway`, `Market`; `FriendCheckout` переведён на них, поведение то же.
-4. **ЛК как раздел `/lk`**: кабинет, магазин, корзина, оформление на общем ядре; типизированные клиенты `lib/cc4/*`.
-5. **Шлюз**: единое ядро + адаптеры, удаление `dev-proxy.mjs` и `server.mjs`, перенос ключа Google и списка разрешённых путей.
-6. **Тесты и CI**: юнит-тесты правил (слоты, разбор адреса, итоги), контрактные тесты шлюза, сборка и линт на каждом коммите.
+Работа идёт в ветке `lk-unify` проекта `coral-club-shop` (в `main` пока не слита).
+
+1. ✅ **Подготовка**: ветка, Next 16 (статический экспорт, клиентские компоненты) прочитан по `AGENTS.md`; базовая линия: типы без ошибок, линтер 0 ошибок и одно старое предупреждение.
+2. ✅ **UI kit**: `FloatInput`, `OptionCards`/`OptionInfo`, `Consent`, `Loader` в `components/ui` (стили перенесены дословно, витрина в `_ui-kit`). Слой `components/checkout`: `AddressSearch`, `StateCombobox`, `MapPicker`, `PickupSheet`, `CountryMenu`, `DeliveryModeSwitch`, `PickupPointButton`, `CourierSlots`.
+3. ◐ **Ядро чек-аута**: сделан сменный транспорт `shopFetch` и клиент шлюза `lib/gateway.ts` (по токену API, без пароля). Осталось: хуки без разметки (`useDelivery`, `usePayments`, `useTotals`, `useAddress`, `usePickup`, `useSlots`, `usePromoBonus`), `Market`, разбор `FriendCheckout` на тонкий экран.
+4. ☐ **ЛК как раздел `/lk`** на общем ядре.
+5. ☐ **Шлюз**: одно ядро на две среды, удаление `dev-proxy.mjs` и `server.mjs`.
+6. ☐ **Тесты и CI**.
 
 ## 7. Риски
 
