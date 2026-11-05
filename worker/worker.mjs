@@ -11,6 +11,7 @@
 // Привязки: SESSIONS (KV), ALLOWED_ORIGINS (через запятую, например https://bogdan787878.github.io), CC4_BASE (по умолчанию
 // https://api.coral.club). Токены, ссылки и значения кук нигде не логируются.
 import { cookieHeader, openShopSession, storeCookies } from "./bootstrap.mjs";
+import { isPaymentLink, resolveFrom, resolvePayment } from "./payment.mjs";
 
 const TTL = 3600; // сессия магазина живёт час с последнего обращения
 const GET_OK = [
@@ -70,8 +71,21 @@ async function shopCall(request, env, rest, url) {
   if (!stored) return reply(request, env, 401, { error: "session" });
   const { jar: pairs, host } = JSON.parse(stored);
   const jar = new Map(pairs);
+  // ссылка оплаты заказа из API кабинета (paymentLink): проходим её до банка и отдаём адрес банка
+  if (request.method === "POST" && rest === "/pay") {
+    const link = (await request.json().catch(() => null))?.link;
+    if (!isPaymentLink(link)) return reply(request, env, 400, { error: "Это не ссылка оплаты магазина" });
+    const r = await resolveFrom({ jar: new Map(), url: new URL(link) });
+    return r.target ? reply(request, env, 200, { target: r.target }) : reply(request, env, 502, { error: r.error, hops: r.hops });
+  }
   const allowed = request.method === "POST" ? POST_OK : request.method === "GET" ? GET_OK : [];
   if (!allowed.some((re) => re.test(rest))) return reply(request, env, 403, { error: "Этот путь чек-аута не пропускается", path: rest });
+  // страница оплаты отвечает редиректом на банк: проходим его здесь и отдаём готовый адрес банка
+  if (request.method === "GET" && /^\/order\/payment\//.test(rest)) {
+    const r = await resolvePayment({ jar, origin: host, path: rest + url.search });
+    await env.SESSIONS.put(sid, JSON.stringify({ jar: [...jar], host }), { expirationTtl: TTL });
+    return r.target ? reply(request, env, 200, { target: r.target }) : reply(request, env, 502, { error: r.error, hops: r.hops });
+  }
   const init = { method: request.method, redirect: "manual", headers: { accept: "application/json, text/html, */*", cookie: cookieHeader(jar) } };
   if (request.method === "POST") {
     init.body = await request.text();

@@ -134,7 +134,8 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
     if (key !== `${deliveryId()}|${place()}`) return;
     window.__shopDebug = { ...(window.__shopDebug ?? {}), payments: r.json };
     st.payments = Array.isArray(r.json?.result) ? r.json.result : [];
-    if (!st.payments.some((p) => p.ID === st.paymentId)) st.paymentId = st.payments[0]?.ID ?? "";
+    // как у чек-аута магазина: способ, которым участник платил в прошлый раз (из /init), иначе первый в списке
+    if (!st.payments.some((p) => p.ID === st.paymentId)) st.paymentId = st.payments.find((p) => p.ID === st.lastPayment)?.ID ?? st.payments[0]?.ID ?? "";
     st.paymentsFor = key;
     paintPay();
     return loadTotals();
@@ -606,32 +607,37 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
     afterOrder();
   }
 
-  /** Куда платить: страница оплаты заказа в магазине несёт ссылку или форму банка; читаем её и ведём туда напрямую. */
+  /**
+   * Куда платить. У заказа в API кабинета есть готовая ссылка оплаты (paymentLink, адрес магазина /redirect.php с сессией в
+   * самой ссылке). Посредник проходит её до банка и отдаёт адрес банка: { target: { url, method, fields } }.
+   * Если посредник банк не нашёл, ссылку открывает сам браузер: магазин ведёт на оплату сам.
+   */
   async function gatewayTarget() {
-    const short = country() === "RU" || country().startsWith("BY");
-    const path = short ? `/order/payment/${st.orderId}/?new_checkout=1` : `/order/payment/${st.orderId}/${encodeURIComponent(st.paymentId)}/?new_checkout=1`;
-    const r = await shopRequest(path);
-    if (!r.ok && !r.text) return null;
-    const box = new DOMParser().parseFromString(r.text || "", "text/html").querySelector(".paysys-payment");
-    if (!box) return null;
-    const external = (raw) => {
-      try {
-        const u = new URL(String(raw ?? "").replace(/&amp;/g, "&"));
-        return u.protocol === "https:" && !/(^|\.)(coral\.club|coralclub\.[a-z]+)$/i.test(u.hostname) ? u : null;
-      } catch {
-        return null;
-      }
-    };
-    const link = external(box.querySelector("a[href]")?.getAttribute("href"));
-    if (link) return { url: link.href, method: "GET", fields: {} };
-    const f = box.querySelector("form");
-    const action = external(f?.getAttribute("action"));
-    if (f && action) {
-      const fields = {};
-      f.querySelectorAll("input[name]").forEach((i) => (fields[i.name] = i.value));
-      return { url: action.href, method: f.getAttribute("method")?.toUpperCase() === "GET" ? "GET" : "POST", fields };
+    st.gatewayError = "";
+    st.payLink = "";
+    const o = await api(`${P}/personal-new/shop/orders/${st.orderId}`);
+    const raw = o.json?.data?.paymentLink;
+    if (typeof raw !== "string" || !raw) {
+      st.gatewayError = "у заказа нет ссылки оплаты";
+      return null;
     }
-    return null;
+    // шлюз зависит от страны: РФ и Беларусь открывают /order/payment/<номер>/, остальные страны несут способ оплаты в адресе
+    // (так переходит сам чек-аут магазина). Сессия участника лежит в ссылке оплаты; относительный url обязателен.
+    const u = new URL(raw);
+    const sid = u.searchParams.get("session_id");
+    const short = country() === "RU" || country().startsWith("BY");
+    const rel = short ? `/order/payment/${st.orderId}/?new_checkout=1` : `/order/payment/${st.orderId}/${st.paymentId}/?new_checkout=1`;
+    st.payLink = sid ? `${u.origin}/redirect.php?session_id=${sid}&url=${encodeURIComponent(rel)}` : raw;
+    const r = await shopRequest("/pay", { method: "POST", body: { link: st.payLink } });
+    st.gatewayError = r.json?.error || (r.ok ? "" : `посредник ответил ${r.status}`);
+    const t = r.json?.target;
+    try {
+      const u = new URL(String(t?.url));
+      if (u.protocol !== "https:" || /(^|\.)(coral\.club|coralclub\.[a-z]+)$/i.test(u.hostname)) return null; // только внешний банк
+      return { url: u.href, method: t.method === "POST" ? "POST" : "GET", fields: t.fields && typeof t.fields === "object" ? t.fields : {} };
+    } catch {
+      return null;
+    }
   }
   function goToGateway(t) {
     if (t.method === "GET" && !Object.keys(t.fields).length) return void location.assign(t.url);
@@ -651,36 +657,15 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
 
   async function afterOrder() {
     const pay = payment();
-    const card = pay && CARD.test(pay.NAME);
-    if (card) {
+    const online = pay && !CASHLIKE.test(pay.NAME); // карта, СБП, SberPay, ЮMoney: открывается шлюз по стране
+    if (online) {
       set(`<div class="ck-page ck-empty">${spinner("Заказ оформлен. Переходим к оплате…")}</div>`);
       const t = await gatewayTarget();
       if (t) return goToGateway(t);
+      // банк напрямую не нашли: ссылка оплаты магазина сама приведёт к оплате
+      if (st.payLink) return void location.assign(st.payLink);
     }
     paintDone();
-  }
-
-  /** Страница оплаты магазина открывается по ссылке из API кабинета: у нас нет сессии магазина в браузере. */
-  async function openPayPage(btn) {
-    const win = window.open("", "_blank");
-    btn.disabled = true;
-    const r = await api(`${P}/web_views/shop/orders/${st.orderId}`);
-    btn.disabled = false;
-    const raw = r.json?.data;
-    const link = typeof raw === "string" ? raw : pick(raw ?? {}, "url", "link", "href");
-    let ok = false;
-    try {
-      const u = new URL(String(link));
-      ok = u.protocol === "https:" && /(^|\.)(coral\.club|coralclub\.[a-z]+)$/i.test(u.hostname);
-    } catch {
-      ok = false;
-    }
-    if (!r.ok || !ok) {
-      win?.close();
-      return toast("Не удалось открыть страницу оплаты. Оплатить можно в разделе «История заказов».", true);
-    }
-    if (win) win.location.href = link;
-    else location.assign(link);
   }
 
   function paintDone() {
@@ -689,8 +674,8 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
     set(`
       <div class="ck-page"><div class="ck-main">
         <section class="ck-section"><p class="ck-doneMark" aria-hidden="true">✓</p><h1 class="ck-title">Заказ № ${esc(st.orderId)} оформлен</h1>
-        <p class="ck-sub">${online ? `Способ оплаты: ${esc(pay.NAME)}. Страницу банка открыть не удалось, оплатить заказ можно на странице магазина.` : `Способ оплаты: ${esc(pay?.NAME ?? "")}.`}</p></section>
-        ${online ? `<button class="ck-pay" type="button" data-act="pay-page">Оплатить заказ</button>` : ""}
+        <p class="ck-sub">${online ? `Способ оплаты: ${esc(pay.NAME)}. Страницу банка открыть не удалось${st.gatewayError ? ` (${esc(st.gatewayError)})` : ""}. Заказ создан и ждёт оплаты, можно повторить переход.` : `Способ оплаты: ${esc(pay?.NAME ?? "")}.`}</p></section>
+        ${online ? `<button class="ck-pay" type="button" data-act="pay-retry">Повторить переход к оплате</button>` : ""}
         <a class="ck-backLink" href="#/orders">История заказов</a>
         <a class="ck-backLink" href="#/">В магазин</a>
       </div></div>`);
@@ -762,7 +747,7 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
     const act = e.target.closest("[data-act]")?.dataset.act;
     if (!act) return;
     if (act === "send") return review();
-    if (act === "pay-page") return openPayPage(e.target.closest("[data-act]"));
+    if (act === "pay-retry") return afterOrder();
     if (act === "points") return openPoints();
     if (act === "manual-mode") return ((form.manual = true), paintDelivery());
     if (act === "search-mode") {
@@ -822,6 +807,7 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
     if (token !== st.run) return;
     const opts = init.json?.result?.CHECKOUT_OPTIONS ?? {};
     rememberCountries(opts.countries);
+    st.lastPayment = init.json?.result?.PROFILE_LAST?.LAST_CHOICES?.LAST_PAYMENT_TYPE?.ID ?? "";
     st.slotCfg = { moscow: opts.moscowDeliveryTimes, spb: opts.spbDeliveryTimes };
     if (!form.city) {
       form.city = (country() === "RU" && (w.city || guess.city)) || "";
