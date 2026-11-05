@@ -73,9 +73,12 @@ async function shopCall(request, env, rest, url) {
   const jar = new Map(pairs);
   // ссылка оплаты заказа из API кабинета (paymentLink): проходим её до банка и отдаём адрес банка
   if (request.method === "POST" && rest === "/pay") {
-    const link = (await request.json().catch(() => null))?.link;
+    const body = await request.json().catch(() => null);
+    const link = body?.link;
     if (!isPaymentLink(link)) return reply(request, env, 400, { error: "Это не ссылка оплаты магазина" });
-    const r = await resolveFrom({ jar: new Map(), url: new URL(link) });
+    // method: способ оплаты из чек-аута (например 160:bank_card); на странице заказа выбирается такой же
+    const method = typeof body?.method === "string" ? body.method.slice(0, 40) : "";
+    const r = await resolveFrom({ jar: new Map(), url: new URL(link), method });
     return r.target ? reply(request, env, 200, { target: r.target }) : reply(request, env, 502, { error: r.error, hops: r.hops });
   }
   const allowed = request.method === "POST" ? POST_OK : request.method === "GET" ? GET_OK : [];

@@ -18,7 +18,6 @@ import https from "node:https";
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { isPaymentLink, resolveFrom, resolvePayment } from "./worker/payment.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -227,19 +226,23 @@ async function shopProxy(req, res, sess, url) {
   const rest = url.pathname.replace(/^\/lk\/shop/, "");
   // ссылка оплаты заказа из API кабинета (paymentLink): проходим её до банка и отдаём адрес банка
   if (req.method === "POST" && rest === "/pay") {
-    const link = tryJson(await readBody(req))?.link;
+    const { isPaymentLink, resolveFrom } = await import(`./worker/payment.mjs?v=${Date.now()}`);
+    const body = tryJson(await readBody(req));
+    const link = body?.link;
     if (!isPaymentLink(link)) return json(res, 400, { error: "Это не ссылка оплаты магазина" });
-    const r = await resolveFrom({ jar: new Map(), url: new URL(link) });
+    const method = typeof body?.method === "string" ? body.method.slice(0, 40) : "";
+    const r = await resolveFrom({ jar: new Map(), url: new URL(link), method });
     console.log(`shop POST /pay → ${r.target ? "адрес банка найден" : "банк не найден"} (${(r.hops ?? []).length} переходов)`);
-    return json(res, r.target ? 200 : 502, r.target ? { target: r.target } : { error: r.error, hops: r.hops });
+    return json(res, r.target ? 200 : 502, r.target ? { target: r.target } : { error: r.error, hops: r.hops, page: r.page });
   }
   const list = req.method === "POST" ? SHOP_POST : req.method === "GET" ? SHOP_GET : [];
   if (!list.some((re) => re.test(rest))) return json(res, 403, { error: "Этот путь чек-аута стенд не пропускает", path: rest });
   // страница оплаты отвечает редиректом на банк: проходим его здесь и отдаём готовый адрес банка
   if (req.method === "GET" && /^\/order\/payment\//.test(rest)) {
+    const { resolvePayment } = await import(`./worker/payment.mjs?v=${Date.now()}`); // стенд для разработки: правки модуля подхватываются без перезапуска
     const r = await resolvePayment({ jar: sess.jar, origin: `https://${HOST}`, path: rest + url.search });
     console.log(`shop GET ${rest.replace(/\d{5,}/, "<номер>")} → ${r.target ? "адрес банка найден" : "банк не найден"} (${(r.hops ?? []).length} переходов)`);
-    return json(res, r.target ? 200 : 502, r.target ? { target: r.target } : { error: r.error, hops: r.hops });
+    return json(res, r.target ? 200 : 502, r.target ? { target: r.target } : { error: r.error, hops: r.hops, page: r.page });
   }
   const body = req.method === "POST" ? await readBody(req) : undefined;
   const headers = {};

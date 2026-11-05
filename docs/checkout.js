@@ -555,27 +555,10 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
       if (!bad.length) toast("Выберите доставку и оплату, дождитесь итога", true);
       return;
     }
-    const lines = shop.lines();
-    const { total } = totalsFigures();
-    const where = isPickup() ? [point()?.ADDRESS, point()?.CITY].filter(Boolean).join(", ") : [form.city, form.street, form.build && `д. ${form.build}`, form.apartment && `кв. ${form.apartment}`].filter(Boolean).join(", ");
-    const box = document.createElement("div");
-    box.className = "sheet-form";
-    box.innerHTML = `
-      <p class="ck-note">Будет создан настоящий заказ в магазине.</p>
-      <ul class="ck-sumLines">${lines.map((l) => `<li class="ck-sumLine"><span class="ck-lineName">${esc(l.p?.name ?? l.code)}</span><span class="ck-lineSum">× ${l.qty}</span></li>`).join("")}</ul>
-      <p class="ck-host"><b>${isPickup() ? "Пункт выдачи" : "Адрес"}:</b> ${esc(where)}</p>
-      <p class="ck-host"><b>Доставка:</b> ${esc(active()?.NAME ?? "")}${slotDay() && slotHours() ? `, ${esc(slotDay().label)}, ${esc(slotHours().replace("-", " – "))}` : ""}<br><b>Оплата:</b> ${esc(payment()?.NAME ?? "")}</p>
-      <dl class="ck-rows"><div class="ck-rowTotal"><dt>Итого</dt><dd>${esc(money(total ?? 0))}</dd></div></dl>
-      <div class="row2"><button class="btn ghost" type="button" data-no>Отмена</button><button class="btn" type="button" data-ok>Оформить заказ</button></div>`;
-    box.querySelector("[data-no]").onclick = sheet.close;
-    box.querySelector("[data-ok]").onclick = (e) => {
-      e.currentTarget.disabled = true;
-      submit();
-    };
-    sheet.open("Подтвердите заказ", box);
+    submit();
   }
 
-  /** Единственное место, где создаётся настоящий заказ: вызывается по нажатию в окне подтверждения. */
+  /** Единственное место, где создаётся настоящий заказ: вызывается по кнопке «Перейти к оплате» (окна подтверждения нет: оформление идёт сразу на шлюз оплаты). */
   async function submit() {
     if (st.sending) return;
     st.sending = true;
@@ -614,7 +597,8 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
   /**
    * Куда платить. У заказа в API кабинета есть готовая ссылка оплаты (paymentLink, адрес магазина /redirect.php с сессией в
    * самой ссылке). Посредник проходит её до банка и отдаёт адрес банка: { target: { url, method, fields } }.
-   * Если посредник банк не нашёл, ссылку открывает сам браузер: магазин ведёт на оплату сам.
+   * Посредник проходит страницу заказа как сам магазин: выбирает способ оплаты (orderSelectPaysystem) и берёт адрес банка.
+   * Если банк не найден, показываем экран заказа с повтором, а не сайт магазина (там нет сессии, будет страница входа).
    */
   async function gatewayTarget() {
     st.gatewayError = "";
@@ -632,7 +616,7 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
     const short = country() === "RU" || country().startsWith("BY");
     const rel = short ? `/order/payment/${st.orderId}/?new_checkout=1` : `/order/payment/${st.orderId}/${st.paymentId}/?new_checkout=1`;
     st.payLink = sid ? `${u.origin}/redirect.php?session_id=${sid}&url=${encodeURIComponent(rel)}` : raw;
-    const r = await shopRequest("/pay", { method: "POST", body: { link: st.payLink } });
+    const r = await shopRequest("/pay", { method: "POST", body: { link: st.payLink, method: st.paymentId } });
     st.gatewayError = r.json?.error || (r.ok ? "" : `посредник ответил ${r.status}`);
     const t = r.json?.target;
     try {
@@ -666,8 +650,7 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
       set(`<div class="ck-page ck-empty">${spinner("Заказ оформлен. Переходим к оплате…")}</div>`);
       const t = await gatewayTarget();
       if (t) return goToGateway(t);
-      // банк напрямую не нашли: ссылка оплаты магазина сама приведёт к оплате
-      if (st.payLink) return void location.assign(st.payLink);
+      // банк не нашли: не уводим на сайт магазина (там нет сессии, будет страница входа), показываем повтор
     }
     paintDone();
   }
