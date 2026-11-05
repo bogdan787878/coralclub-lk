@@ -202,8 +202,9 @@ async function login(req, res, sess) {
 async function proxy(req, res, sess, url) {
   const rest = url.pathname.replace(/^\/api/, "/restApi");
   if (!ALLOWED.test(rest)) return json(res, 403, { error: "Этот путь стенд не пропускает", path: rest });
-  const method = req.method === "POST" ? "POST" : req.method === "GET" ? "GET" : null;
-  if (!method) return json(res, 405, { error: "Только GET и POST" });
+  // GET и POST; DELETE только для удаления позиции из корзины (/proxyCC4/basket/{код}/{участник})
+  const method = req.method === "POST" ? "POST" : req.method === "GET" ? "GET" : req.method === "DELETE" && /^\/restApi\/proxyCC4\/basket\/\d+\/-?\d+$/.test(rest) ? "DELETE" : null;
+  if (!method) return json(res, 405, { error: "Только GET и POST (DELETE только для корзины)" });
   const body = method === "POST" ? await readBody(req) : undefined;
   const headers = {};
   if (req.headers["content-type"]) headers["content-type"] = req.headers["content-type"];

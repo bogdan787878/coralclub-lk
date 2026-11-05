@@ -616,3 +616,5 @@ body.has-tabbar .home { padding-bottom: calc(112px + env(safe-area-inset-bottom)
 .s-toast.show { opacity: 1; transform: translate(-50%, 0); }
 .s-toast.bad { background: var(--bad); }
 @media (prefers-reduced-motion: reduce) { .s-toast { transition: none; } }
+.s-badges { position: absolute; top: 10px; left: 10px; display: flex; flex-wrap: wrap; gap: 4px; max-width: calc(100% - 60px); }
+.s-badges i { padding: 3px 8px; border-radius: 999px; background: #fff; color: #5d6b78; font-style: normal; font-size: .68rem; font-weight: var(--fw-strong); box-shadow: 0 1px 3px rgba(20, 30, 40, .1); }

@@ -4,12 +4,16 @@
 // Структуры ответов в описании API не заданы, поэтому поля читаются осторожно (см. normalize) и сырой ответ
 // можно посмотреть в консоли: window.__shopDebug.
 
-/** Продукты первой фазы «Гидратация». Артикулы российского магазина; фото и подписи — запасные, если API их не отдал. */
+/** Продукты раздела «Гидратация» российского магазина (coralclub.ru/shop/hydration/). Названия и фото берутся из API;
+ *  здесь они запасные, на случай если каталог не ответил. */
 const HYDRATION = [
-  { code: 80720, slug: "hydramax-plus", name: "Hydramax Plus", note: "Набор", set: true },
-  { code: 80380, slug: "hydramax", name: "Hydramax", note: "Набор", set: true },
-  { code: 2220, slug: "coral-mine-silver", name: "Coral-Mine Silver", note: "" },
-  { code: 91883, slug: "h-500", name: "H-500", note: "Калий и магний, 120 капсул" },
+  { code: 80720, slug: "hydramax-plus", name: "Гидрамакс Плюс", note: "", set: true },
+  { code: 80380, slug: "hydramax", name: "Гидрамакс", note: "2 упаковки по 15 стиков", set: true },
+  { code: 91800, slug: "h-500", name: "H-500", note: "набор", set: true },
+  { code: 2201, slug: "coral-mine-silver", name: "Корал-Майн Сильвер", note: "10 саше" },
+  { code: 2221, slug: "", name: "Корал-Майн", note: "10 саше" },
+  { code: 91883, slug: "h-500", name: "H-500", note: "120 капсул" },
+  { code: 225115, slug: "", name: "Оушенмин", note: "3x10 саше" },
 ];
 const FALLBACK = new Map(HYDRATION.map((p) => [p.code, p]));
 const CATALOG_TABS = [
@@ -26,23 +30,6 @@ const IC = {
   trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"/></svg>`,
   check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg>`,
   bag: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.500l2.300 10.500h10.400L20.500 7H6.200"/><circle cx="9" cy="19" r="1.400"/><circle cx="17" cy="19" r="1.400"/></svg>`,
-};
-
-const FAV_KEY = "lk_fav";
-const readFav = () => {
-  try {
-    const v = JSON.parse(localStorage.getItem(FAV_KEY) ?? "[]");
-    return new Set(Array.isArray(v) ? v.map(Number) : []);
-  } catch {
-    return new Set();
-  }
-};
-const writeFav = (set) => {
-  try {
-    localStorage.setItem(FAV_KEY, JSON.stringify([...set]));
-  } catch {
-    /* без хранилища избранное живёт до перезагрузки */
-  }
 };
 
 /* ---------- разбор ответов API ---------- */
@@ -67,29 +54,35 @@ function listOf(json) {
 }
 const stripTags = (s) => String(s ?? "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
 
+/** Продукт по схеме каталога: code, name, breadCrumbs, previewPicture, clubAmount, retailAmount, isAvailable, isFavorite, bonuses, badges. */
 function normalize(raw) {
   const code = toNum(pick(raw, "code", "productCode", "article", "id"));
   if (code === null) return null;
   const fb = FALLBACK.get(code);
-  const club = toNum(pick(raw, "priceClub", "clubPrice", "price.club", "price.member", "price", "cost", "price.value", "prices.club"));
-  const regular = toNum(pick(raw, "priceRegular", "regularPrice", "oldPrice", "price.regular", "price.old", "priceOld", "prices.regular"));
-  const img = pick(raw, "image", "picture", "img", "preview", "previewImage", "photo", "images.0.url", "images.0.src", "images.0", "photos.0.url", "photos.0.src", "photos.0");
+  const club = toNum(pick(raw, "clubAmount", "priceClub", "clubPrice"));
+  const original = toNum(pick(raw, "originalAmount"));
+  const retail = toNum(pick(raw, "retailAmount", "priceRegular", "regularPrice", "oldPrice"));
+  const price = club ?? original ?? retail;
+  const img = pick(raw, "previewPicture", "image", "picture", "img", "preview");
   return {
     code,
     name: String(pick(raw, "name", "title", "productName") ?? fb?.name ?? `Артикул ${code}`),
-    note: stripTags(pick(raw, "shortDescription", "subtitle", "form", "releaseForm") ?? fb?.note ?? ""),
+    note: stripTags(pick(raw, "breadCrumbs", "shortDescription", "form") ?? fb?.note ?? ""),
     description: stripTags(pick(raw, "description", "fullDescription", "text", "detailText") ?? ""),
-    price: club,
-    old: regular !== null && club !== null && regular > club ? regular : null,
-    bonus: toNum(pick(raw, "bonus", "points", "pv", "volume")),
-    image: typeof img === "string" && /^(https?:)?\/\//.test(img) ? img : fb ? `img/shop/${fb.slug}.webp` : "",
-    available: pick(raw, "available", "inStock", "isAvailable") !== false,
+    price,
+    old: retail !== null && price !== null && retail > price ? retail : null,
+    currency: String(pick(raw, "currency") ?? "RUB"),
+    bonus: toNum(pick(raw, "bonuses", "bonus", "points")),
+    badges: Array.isArray(raw.badges) ? raw.badges.map((b) => stripTags(b?.text)).filter(Boolean).slice(0, 2) : [],
+    image: typeof img === "string" && /^(https?:)?\/\//.test(img) ? img : fb?.slug ? `img/shop/${fb.slug}.webp` : "",
+    available: pick(raw, "isAvailable", "available", "inStock") !== false,
+    fav: raw.isFavorite === true,
     set: Boolean(fb?.set),
   };
 }
 
-/** Корзина: массив записей или объект «код → количество»; возвращает Map(код → количество). */
-function parseCart(json) {
+/** Корзина по схеме API: data[{ memberId, items:[{ productId, quantity }] }]. Берём корзину самого участника (в ответе могут быть корзины групповых получателей). */
+function parseCart(json, me) {
   const d = json?.data ?? json;
   const out = new Map();
   const put = (code, q) => {
@@ -97,12 +90,13 @@ function parseCart(json) {
     const n = toNum(q);
     if (c !== null && n && n > 0) out.set(c, (out.get(c) ?? 0) + n);
   };
-  const rows = listOf(json);
-  if (rows.length) {
-    for (const r of rows) put(pick(r, "code", "productCode", "productId", "article", "id"), pick(r, "quantity", "qty", "count", "amount"));
-  } else if (d && typeof d === "object") {
-    for (const [k, v] of Object.entries(d)) if (typeof v !== "object") put(k, v);
+  const entries = Array.isArray(d) ? d : [];
+  if (entries.some((e) => Array.isArray(e?.items))) {
+    const mine = entries.filter((e) => toNum(e?.memberId) === me);
+    for (const e of mine.length ? mine : entries) for (const it of e.items ?? []) put(pick(it, "productId", "code", "id"), pick(it, "quantity", "qty", "count"));
+    return out;
   }
+  for (const r of listOf(json)) put(pick(r, "productId", "code", "id"), pick(r, "quantity", "qty", "count"));
   return out;
 }
 
@@ -110,13 +104,20 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount 
   const products = new Map(); // код → продукт
   let cart = new Map(); // код → количество
   let cartLoaded = false;
-  const fav = readFav();
-  const state = { tab: "shop", chip: "hydration", lists: {}, token: 0 };
+  const fav = new Set(); // коды избранного; источник — API (isFavorite и /user/favorites)
+  const state = { tab: "shop", chip: "hydration", lists: {}, token: 0, apiDown: false };
 
   // то, чего API не вернул, показываем запасными данными, но в кэш не кладём: при следующем заходе спросим снова
-  const getP = (c) => products.get(c) ?? (FALLBACK.has(c) ? { ...normalize({ code: c }), unlisted: true } : undefined);
-  const price = (n) => (n === null ? "" : money(n, "RUB"));
-  const problem = (r) => (r.status === 0 ? "нет связи с сервером" : r.status === 401 ? "нужно войти заново" : `ошибка ${r.status}`);
+  const getP = (c) => products.get(c) ?? (state.apiDown && FALLBACK.has(c) ? { ...normalize({ code: c }), unlisted: true } : undefined);
+  const price = (n, cur = "RUB") => (n === null ? "" : money(n, cur));
+  const problem = (r) => {
+    if (r.status === 0) return "нет связи с сервером";
+    if (r.status === 401) return "нужно войти заново";
+    if (r.json?.code === "ProductUnavailable") return "товар недоступен: нет в наличии или закрытая продажа";
+    const msg = r.json?.message;
+    const err = r.json?.errors ? Object.values(r.json.errors).flat()[0] : "";
+    return `${err || msg || "ошибка"} (${r.status})`;
+  };
   const count = () => [...cart.values()].reduce((a, b) => a + b, 0);
 
   /* ---------- уведомление ---------- */
@@ -137,16 +138,21 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount 
   }
 
   /* ---------- данные ---------- */
+  /** Кладёт продукт в кэш и сверяет избранное с тем, что сказал API. */
+  function remember(p) {
+    if (!p) return;
+    products.set(p.code, p);
+    p.fav ? fav.add(p.code) : fav.delete(p.code);
+  }
+
   async function fetchProducts(codes) {
     const need = codes.filter((c) => !products.has(c));
     if (!need.length) return { ok: true };
     const qs = need.map((c) => `products[]=${encodeURIComponent(c)}`).join("&");
     const r = await api(`${P}/catalog/products?${qs}`);
     window.__shopDebug = { ...(window.__shopDebug ?? {}), catalog: r.json };
-    if (r.ok) for (const raw of listOf(r.json)) {
-      const p = normalize(raw);
-      if (p) products.set(p.code, p);
-    }
+    state.apiDown = !r.ok;
+    if (r.ok) for (const raw of listOf(r.json)) remember(normalize(raw));
     return r;
   }
 
@@ -154,7 +160,7 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount 
     const r = await api(`${P}/basket/quantities`);
     window.__shopDebug = { ...(window.__shopDebug ?? {}), basket: r.json };
     if (r.ok) {
-      cart = parseCart(r.json);
+      cart = parseCart(r.json, memberId());
       cartLoaded = true;
     }
     onCount?.(count());
@@ -166,7 +172,12 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount 
     const r = await api(`${P}/basket`, { method: "POST", body: { code, quantity: 1, memberId: memberId() } });
     btn && (btn.disabled = false);
     if (!r.ok) return toast(`Не удалось добавить: ${problem(r)}`, true);
-    await refreshCart();
+    // POST /basket отвечает всей корзиной: обновляем без лишнего запроса
+    const next = parseCart(r.json, memberId());
+    if (next.size) {
+      cart = next;
+      onCount?.(count());
+    } else await refreshCart();
     toast("Добавлено в корзину");
     if (btn) {
       btn.classList.add("done");
@@ -227,12 +238,13 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount 
   const card = (p) => `
     <article class="s-card" data-code="${p.code}">
       <button class="s-img" type="button" data-open aria-label="${esc(p.name)}: подробнее">${p.image ? `<img src="${esc(p.image)}" alt="" loading="lazy" decoding="async" />` : IC.bag}</button>
+      ${p.badges?.length ? `<div class="s-badges">${p.badges.map((b) => `<i>${esc(b)}</i>`).join("")}</div>` : ""}
       <button class="s-fav${fav.has(p.code) ? " on" : ""}" type="button" data-fav aria-label="В избранное" aria-pressed="${fav.has(p.code)}">${IC.heart}</button>
       <div class="s-info">
         <h3>${esc(p.name)}</h3>
         ${p.note ? `<p class="s-note">${esc(p.note)}</p>` : ""}
         <div class="s-buy">
-          <div class="s-price">${p.price !== null ? `<b>${esc(price(p.price))}</b>${p.old ? `<s>${esc(price(p.old))}</s>` : ""}` : `<span class="s-note">Цена в корзине</span>`}</div>
+          <div class="s-price">${p.price !== null ? `<b>${esc(price(p.price, p.currency))}</b>${p.old ? `<s>${esc(price(p.old, p.currency))}</s>` : ""}` : `<span class="s-note">Цена в корзине</span>`}</div>
           <button class="s-add" type="button" data-add aria-label="Добавить в корзину"${p.available ? "" : " disabled"}>${IC.plus}</button>
         </div>
       </div>
@@ -248,11 +260,13 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount 
     const r = await fetchProducts(HYDRATION.map((p) => p.code));
     if (token !== state.token) return;
     const list = HYDRATION.map((h) => getP(h.code)).filter(Boolean);
+    const missing = r.ok ? HYDRATION.filter((h) => !products.has(h.code)).map((h) => h.code) : [];
     const sets = list.filter((p) => p.set);
     const rest = list.filter((p) => !p.set);
     set(`
       <section class="s-hero"><p class="s-eyebrow">Магазин</p><h1>Гидратация</h1><p>Продукты для питьевого режима и минерального баланса.</p></section>
-      ${r.ok ? "" : `<p class="s-warn">Каталог не ответил (${esc(problem(r))}), показаны данные по умолчанию.</p>`}
+      ${r.ok ? "" : `<p class="s-warn">Каталог не ответил: ${esc(problem(r))}. Показаны данные по умолчанию, добавить в корзину может не получиться.</p>`}
+      ${missing.length ? `<p class="s-warn">Каталог не вернул артикулы: ${missing.join(", ")}. Они недоступны для вашего аккаунта или указаны неверно.</p>` : ""}
       ${sets.length ? `<h2 class="s-h">Наборы</h2><div class="s-car">${sets.map(card).join("")}</div>` : ""}
       ${rest.length ? `<h2 class="s-h">Добавки</h2><div class="s-grid">${rest.map(card).join("")}</div>` : ""}`);
   }
@@ -274,7 +288,7 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount 
       window.__shopDebug = { ...(window.__shopDebug ?? {}), [state.chip]: r.json };
       if (!r.ok) err = problem(r);
       list = listOf(r.json).map(normalize).filter(Boolean);
-      for (const p of list) products.set(p.code, p);
+      for (const p of list) remember(p);
       if (r.ok) state.lists[state.chip] = list;
     }
     if (token !== state.token) return;
@@ -305,7 +319,7 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount 
           ({ p, qty }) => `
         <li class="s-line" data-code="${p.code}">
           <span class="s-lthumb">${p.image ? `<img src="${esc(p.image)}" alt="" loading="lazy" />` : IC.bag}</span>
-          <div class="s-lmain"><h3>${esc(p.name)}</h3><p class="s-note">${p.price !== null ? esc(price(p.price)) : "Цена при оформлении"}</p>
+          <div class="s-lmain"><h3>${esc(p.name)}</h3><p class="s-note">${p.price !== null ? esc(price(p.price, p.currency)) : "Цена при оформлении"}</p>
             <div class="s-step"><button type="button" data-dec aria-label="Меньше">${qty > 1 ? IC.minus : IC.trash}</button><b>${qty}</b><button type="button" data-inc aria-label="Больше">${IC.plus}</button></div>
           </div>
           <button class="s-del" type="button" data-del aria-label="Удалить из корзины">${IC.trash}</button>
@@ -322,13 +336,19 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount 
 
   async function renderFav() {
     const token = ++state.token;
-    const codes = [...fav];
-    if (!codes.length) return set(`<h1 class="s-title">Избранное</h1><div class="s-emptybox"><span aria-hidden="true">${IC.heart}</span><p>Здесь появятся товары, которые вы отметили сердечком</p><a class="btn" href="#/">В магазин</a></div>`);
-    set(`<h1 class="s-title">Избранное</h1>${skeleton(Math.min(codes.length, 4))}`);
-    const r = await fetchProducts(codes);
+    set(`<h1 class="s-title">Избранное</h1>${skeleton(2)}`);
+    const r = await api(`${P}/user/favorites`);
+    window.__shopDebug = { ...(window.__shopDebug ?? {}), favorites: r.json };
     if (token !== state.token) return;
-    const list = codes.map((c) => getP(c)).filter(Boolean);
-    set(`<h1 class="s-title">Избранное</h1>${r.ok ? "" : `<p class="s-warn">Каталог не ответил (${esc(problem(r))}).</p>`}${list.length ? `<div class="s-grid">${list.map(card).join("")}</div>` : `<p class="s-empty">Не нашли эти товары в каталоге.</p>`}`);
+    if (!r.ok) return set(`<h1 class="s-title">Избранное</h1><p class="s-warn">Не удалось получить избранное: ${esc(problem(r))}.</p>`);
+    const list = listOf(r.json).map(normalize).filter(Boolean);
+    fav.clear();
+    for (const p of list) {
+      p.fav = true;
+      remember(p);
+    }
+    if (!list.length) return set(`<h1 class="s-title">Избранное</h1><div class="s-emptybox"><span aria-hidden="true">${IC.heart}</span><p>Здесь появятся товары, которые вы отметили сердечком</p><a class="btn" href="#/">В магазин</a></div>`);
+    set(`<h1 class="s-title">Избранное</h1><div class="s-grid">${list.map(card).join("")}</div>`);
   }
 
   function openProduct(code) {
@@ -339,13 +359,15 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount 
     box.innerHTML = `
       ${p.image ? `<div class="s-pdpimg"><img src="${esc(p.image)}" alt="${esc(p.name)}" /></div>` : ""}
       <div class="s-pdprow"><div>${p.note ? `<p class="s-note">${esc(p.note)}</p>` : ""}</div>
-        <div class="s-price">${p.price !== null ? `<b>${esc(price(p.price))}</b>${p.old ? `<s>${esc(price(p.old))}</s>` : ""}` : ""}</div></div>
+        <div class="s-price">${p.price !== null ? `<b>${esc(price(p.price, p.currency))}</b>${p.old ? `<s>${esc(price(p.old, p.currency))}</s>` : ""}` : ""}</div></div>
       ${p.bonus ? `<p class="s-note">Баллы: ${esc(p.bonus)}</p>` : ""}
       ${p.description ? `<p class="s-desc">${esc(p.description.slice(0, 600))}</p>` : ""}
       <div class="row2"><button class="btn ghost s-pfav" type="button">${fav.has(code) ? "В избранном" : "В избранное"}</button><button class="btn s-padd" type="button"${p.available ? "" : " disabled"}>${p.available ? "В корзину" : "Нет в наличии"}</button></div>`;
-    box.querySelector(".s-pfav").onclick = (e) => {
-      toggleFav(code);
-      e.currentTarget.textContent = fav.has(code) ? "В избранном" : "В избранное";
+    box.querySelector(".s-pfav").onclick = async (e) => {
+      const btn = e.currentTarget;
+      btn.textContent = fav.has(code) ? "В избранное" : "В избранном"; // сразу, как и сердечко на карточке
+      await toggleFav(code);
+      btn.textContent = fav.has(code) ? "В избранном" : "В избранное";
     };
     box.querySelector(".s-padd").onclick = async (e) => {
       await addToCart(code, null);
@@ -354,14 +376,26 @@ export function createShop(root, { api, P, memberId, money, esc, sheet, onCount 
     sheet.open(p.name, box);
   }
 
-  function toggleFav(code) {
-    fav.has(code) ? fav.delete(code) : fav.add(code);
-    writeFav(fav);
-    root.querySelectorAll(`.s-card[data-code="${code}"] .s-fav`).forEach((b) => {
-      b.classList.toggle("on", fav.has(code));
-      b.setAttribute("aria-pressed", String(fav.has(code)));
-    });
-    if (state.tab === "fav" && !fav.has(code)) renderFav();
+  /** Сердечко: сразу меняем вид, затем просим API (POST /user/favorites переключает) и верим его ответу. */
+  async function toggleFav(code) {
+    const paint = () =>
+      root.querySelectorAll(`.s-card[data-code="${code}"] .s-fav`).forEach((b) => {
+        b.classList.toggle("on", fav.has(code));
+        b.setAttribute("aria-pressed", String(fav.has(code)));
+      });
+    const before = fav.has(code);
+    before ? fav.delete(code) : fav.add(code);
+    paint();
+    const r = await api(`${P}/user/favorites`, { method: "POST", body: { offerCode: code } });
+    const real = r.json?.data?.isFavorite;
+    if (!r.ok || typeof real !== "boolean") {
+      before ? fav.add(code) : fav.delete(code);
+      paint();
+      return toast(`Не удалось изменить избранное: ${problem(r)}`, true);
+    }
+    real ? fav.add(code) : fav.delete(code);
+    paint();
+    if (state.tab === "fav" && !real) renderFav();
   }
 
   /* ---------- события ---------- */
