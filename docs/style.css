@@ -387,3 +387,23 @@ body:has(#dash-view:not([hidden])) { background: #f1f3f4; }
 .fl-name { font-size: .82rem; color: #6b7480; }
 .sheet-form label.fl-check { flex-direction: row; align-items: center; justify-content: flex-start; gap: 8px; }
 .sheet-form label.fl-check input { width: 18px; height: 18px; }
+
+/* основной счёт на главной ведёт в Coral Кошелёк */
+.h-bal { display: flex; flex-direction: column; align-items: center; gap: 6px; border: 0; background: none; font: inherit; padding: 0; cursor: pointer; color: inherit; }
+.h-bal .h-amount { display: block; }
+.h-bal .h-caption { display: inline-flex; align-items: center; gap: 2px; }
+.h-bal .h-caption i { display: inline-grid; width: 16px; height: 16px; }
+.h-bal .h-caption svg { width: 14px; height: 14px; }
+
+/* страница Coral Кошелёк */
+#h-wallet .h-balance { padding: 8px 0 28px; }
+#h-wallet .h-card { margin-top: 8px; }
+.h-actions-4 { grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.h-actions-4 .h-act { font-size: .72rem; line-height: 1.2; }
+.h-actions-4 .h-act span { width: 56px; height: 56px; }
+#h-detail #h-wallet .h-card h3 { display: block; }
+.sheet-form a.btn { display: block; text-align: center; text-decoration: none; }
+.sheet-sub { margin: 4px 0 0; font-size: .95rem; }
+.sheet-form .seg { align-self: flex-start; }
+#h-wallet .h-head h3 { white-space: nowrap; }
+#h-wallet .seg button { white-space: nowrap; }

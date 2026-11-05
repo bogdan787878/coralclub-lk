@@ -18,6 +18,9 @@ const ICON = {
   truck: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h11v10H3zM14 10h4l3 3v3h-7"/><circle cx="7.5" cy="17.5" r="1.8"/><circle cx="17.5" cy="17.5" r="1.8"/></svg>`,
   tick: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>`,
   team: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c.6-3.2 3-4.8 6-4.8s5.4 1.6 6 4.8"/><circle cx="17.5" cy="9" r="2.4"/><path d="M17 14.3c2.2.1 3.7 1.4 4.2 3.7"/></svg>`,
+  next: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>`,
+  card: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18M7 15h3"/></svg>`,
+  doc: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg>`,
   back: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>`,
   close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>`,
 };
@@ -69,22 +72,35 @@ export function createHome(root, api) {
       </section>
       <section class="h-balance" aria-label="Баланс">
         <button class="h-tag" id="h-tag" type="button" hidden></button>
-        <p class="h-amount" id="h-amount">—</p>
-        <p class="h-caption">Счёт основной</p>
+        <button class="h-bal" id="h-bal" type="button" aria-label="Открыть Coral Кошелёк">
+          <span class="h-amount" id="h-amount">—</span>
+          <span class="h-caption">Счёт основной<i aria-hidden="true">${ICON.next}</i></span>
+        </button>
       </section>
       <nav class="h-actions" aria-label="Быстрые действия">
         <button class="h-act" data-act="points" type="button"><span>${ICON.points}</span>Перевод баллов</button>
         <button class="h-act" data-act="bonus" type="button"><span>${ICON.bonus}</span>Перевод бонусов</button>
         <button class="h-act" data-act="invite" type="button"><span>${ICON.invite}</span>Пригласить в клуб</button>
       </nav>
-      <a class="h-link" href="#/bonus"><span class="h-link-ic" aria-hidden="true">${ICON.coin}</span><span class="h-link-text"><b>Движение бонусов</b><span>Приход и расход бонусов</span></span></a>
       <a class="h-link" href="#/orders"><span class="h-link-ic" aria-hidden="true">${ICON.bag}</span><span class="h-link-text"><b>История заказов</b><span>Все заказы и их статусы</span></span></a>
       <a class="h-link" href="#/structure"><span class="h-link-ic" aria-hidden="true">${ICON.team}</span><span class="h-link-text"><b>Моя структура</b><span>Кто в вашей команде</span></span></a>
       <section class="home-metrics metrics" id="metrics"></section>
     </div>
     <div id="h-detail" hidden>
       <header class="h-dhead"><a class="h-back" href="#/" aria-label="Назад">${ICON.back}</a><h2 id="h-dtitle"></h2></header>
-      <section class="h-card" id="h-bonus" hidden aria-label="Движение бонусов"></section>
+      <div id="h-wallet" hidden>
+        <section class="h-balance" aria-label="Coral Кошелёк">
+          <p class="h-amount" id="w-amount">—</p>
+          <p class="h-caption">Coral Кошелёк</p>
+        </section>
+        <nav class="h-actions h-actions-4" aria-label="Действия по счёту">
+          <button class="h-act" data-wact="pay" type="button"><span>${ICON.bag}</span>Оплатить бонусами</button>
+          <button class="h-act" data-wact="payout" type="button"><span>${ICON.card}</span>Вывести на карту</button>
+          <button class="h-act" data-wact="points" type="button"><span>${ICON.points}</span>Перевести баллы</button>
+          <button class="h-act" data-wact="stmt" type="button"><span>${ICON.doc}</span>Выписка</button>
+        </nav>
+        <section class="h-card" id="h-bonus" aria-label="История по счету"></section>
+      </div>
       <section class="h-card" id="h-orders" hidden aria-label="История заказов"></section>
       <div id="h-structure" hidden></div>
       <div id="h-transfer" hidden>
@@ -270,6 +286,83 @@ export function createHome(root, api) {
   $("#h-tag").onclick = () => {
     location.hash = "#/transfer";
   };
+  $("#h-bal").onclick = () => {
+    location.hash = "#/wallet";
+  };
+
+  /* ---------- Coral Кошелёк: действия по счёту ---------- */
+  const textBox = (html) => Object.assign(document.createElement("div"), { className: "sheet-form", innerHTML: html });
+  const shopUrl = () => `https://${state.shopHost || "coralclub.ru"}/`;
+
+  /** Бонусами заказ оплачивается при оформлении в магазине: отдельного метода «оплатить заказ бонусами» в API нет. */
+  function sheetPay() {
+    const have = state.balance === null ? "—" : money(state.balance, state.currency);
+    openSheet("Оплатить заказ бонусами", textBox(`<p class="muted">Доступно: <b>${esc(have)}</b></p><p>Бонусы списываются при оформлении заказа: на шаге оплаты в магазине выберите оплату бонусами.</p><a class="btn" href="${esc(shopUrl())}" target="_blank" rel="noopener">Перейти в магазин</a>`));
+  }
+
+  /** Выплата на карту: проверяем доступность и показываем заявки; саму заявку оформляет страница кабинета (ссылка из API). */
+  async function sheetPayout() {
+    const box = textBox(`<p class="muted">Загружаем…</p>`);
+    openSheet("Вывести на карту", box);
+    const [avail, list, link] = await Promise.all([
+      api(`${P}/personal-new/wallet/assetDistributor/is-available`),
+      api(`${P}/personal-new/wallet/bonus-payouts/list`),
+      api(`${P}/web_views/wallet/assetDistributor`),
+    ]);
+    const have = state.balance === null ? "—" : money(state.balance, state.currency);
+    const ok = avail.ok ? avail.json?.data : null;
+    const available = ok === true || ok?.available === true || ok?.isAvailable === true;
+    const url = typeof link.json?.data === "string" ? link.json.data : link.json?.data?.url || link.json?.data?.link || "";
+    const raw = list.json?.data;
+    const items = Array.isArray(raw) ? raw : Array.isArray(raw?.items) ? raw.items : [];
+    const rows = items.slice(0, 5).map((i) => {
+      const sum = Number(i.amount ?? i.sum ?? i.total ?? NaN);
+      const when = dmy(String(i.createdAt ?? i.date ?? i.created ?? "").slice(0, 10));
+      const st = i.statusName ?? i.status ?? "";
+      return `<li class="h-row"><div class="h-main"><b>Заявка${i.id ? ` № ${esc(i.id)}` : ""}</b><span>${esc([when, st].filter(Boolean).join(" · "))}</span></div>${Number.isFinite(sum) ? `<span class="h-sum">${esc(money(sum, i.currency || state.currency))}</span>` : ""}</li>`;
+    });
+    const status = !avail.ok ? `<p class="note bad">Не удалось проверить доступность выплат: ${esc(problem(avail))}</p>` : available ? "" : `<p class="note">Выплата бонусов для этого аккаунта недоступна: раздел работает только для участников из России, при выполнении условий.</p>`;
+    box.innerHTML = `<p class="muted">Доступно: <b>${esc(have)}</b></p>${status}${url && (available || !avail.ok) ? `<a class="btn" href="${esc(url)}" target="_blank" rel="noopener">Оформить заявку в кабинете</a>` : ""}${rows.length ? `<h3 class="sheet-sub">Мои заявки</h3><ul class="h-list">${rows.join("")}</ul>` : list.ok ? `<p class="muted">Заявок на выплату пока нет.</p>` : ""}`;
+  }
+
+  /** Выписка: файл для Excel из отчёта «Движение бонусов» за выбранный период. */
+  function sheetStatement() {
+    let months = 3;
+    const f = form(`
+      <p class="muted">Операции по Coral Кошельку: приход, расход, комментарии.</p>
+      <div class="seg" role="group" aria-label="Период">${[1, 3, 6].map((n) => `<button type="button" data-m="${n}" class="${n === months ? "on" : ""}">${n} мес.</button>`).join("")}</div>
+      <button class="btn" type="submit" id="go">Скачать для Excel</button>
+      <p class="note" role="status"></p>`);
+    f.querySelectorAll(".seg button").forEach((b) => {
+      b.onclick = () => {
+        months = Number(b.dataset.m);
+        f.querySelectorAll(".seg button").forEach((x) => x.classList.toggle("on", x === b));
+      };
+    });
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      note(f, "Готовим выписку…");
+      const r = await api(`${P}/personal-new/wallet/baRep?monthReport=${months}`);
+      const items = r.json?.data?.items;
+      if (!r.ok || !Array.isArray(items)) return note(f, problem(r), "bad");
+      const num = (v) => (v === null || v === undefined || v === "" ? "" : String(Number(v)).replace(".", ","));
+      const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+      const lines = [["Дата", "Операция", "Комментарий", "Приход", "Расход", "Валюта"].map(cell).join(";")];
+      items.forEach((i) => lines.push([dmy(i.date), i.typeName, i.comment || i.eventId || "", num(i.income), num(i.expense), i.currency || state.currency].map(cell).join(";")));
+      const url = URL.createObjectURL(new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" }));
+      const a = Object.assign(document.createElement("a"), { href: url, download: `coral-koshelek-${months}m.csv` });
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      note(f, `Выписка скачана: ${count(items.length, ["операция", "операции", "операций"])}`, "ok");
+    };
+    openSheet("Выписка", f);
+  }
+
+  root.querySelectorAll("[data-wact]").forEach((b) => {
+    b.onclick = () => ({ pay: sheetPay, payout: sheetPayout, points: sheetPoints, stmt: sheetStatement })[b.dataset.wact]();
+  });
 
   /* ---------- данные ---------- */
   function paint() {
@@ -278,6 +371,7 @@ export function createHome(root, api) {
     $("#h-id").textContent = p?.id ? `Coral ID ${p.id}` : "";
     paintUser();
     $("#h-amount").textContent = state.balance === null ? "—" : money(state.balance, state.currency);
+    $("#w-amount").textContent = $("#h-amount").textContent;
     const tag = $("#h-tag");
     tag.hidden = !state.pointsLoaded;
     if (state.pointsLoaded) {
@@ -292,7 +386,7 @@ export function createHome(root, api) {
   function paintBonus() {
     if (!state.bonus) return;
     if (state.bonus.error) {
-      bonusRoot.innerHTML = `<h3>Движение бонусов</h3><p class="muted">${esc(state.bonus.error)}</p>`;
+      bonusRoot.innerHTML = `<h3>История по счету</h3><p class="muted">${esc(state.bonus.error)}</p>`;
       return;
     }
     const all = state.bonus.items.filter((i) => !i.currency || i.currency === state.currency);
@@ -305,7 +399,7 @@ export function createHome(root, api) {
       return `<li class="h-row"><span class="h-ico ${inc ? "in" : "out"}">${inc ? "↓" : "↑"}</span><div class="h-main"><b>${esc(i.typeName || "Операция")}</b><span>${esc(sub)}</span></div><span class="h-sum ${inc ? "in" : ""}">${inc ? "+" : "−"}${esc(money(sum, i.currency || state.currency))}</span></li>`;
     });
     bonusRoot.innerHTML = `
-      <div class="h-head"><h3>Движение бонусов</h3>
+      <div class="h-head"><h3>История по счету</h3>
         <div class="seg" role="group" aria-label="Период">${[1, 3, 6].map((n) => `<button type="button" data-m="${n}" class="${n === state.bonusMonths ? "on" : ""}">${n} мес.</button>`).join("")}</div></div>
       <div class="h-stats"><div><span>Приход</span><b class="in">+${esc(money(income, state.currency))}</b></div><div><span>Расход</span><b>−${esc(money(expense, state.currency))}</b></div></div>
       ${rows.length ? `<ul class="h-list">${rows.join("")}</ul>` : `<p class="muted">Операций за период нет.</p>`}
@@ -323,7 +417,7 @@ export function createHome(root, api) {
     });
   }
   async function loadBonus() {
-    bonusRoot.innerHTML = `<h3>Движение бонусов</h3><p class="muted">Загружаем…</p>`;
+    bonusRoot.innerHTML = `<h3>История по счету</h3><p class="muted">Загружаем…</p>`;
     const r = await api(`${P}/personal-new/wallet/baRep?monthReport=${state.bonusMonths}`);
     const items = r.json?.data?.items;
     state.bonus = r.ok && Array.isArray(items) ? { items } : { error: problem(r) };
@@ -807,14 +901,14 @@ export function createHome(root, api) {
 
   /* ---------- переходы: главная ↔ экраны «Движение бонусов» и «История заказов» ---------- */
   function route() {
-    const page = { "#/bonus": "bonus", "#/orders": "orders", "#/transfer": "transfer", "#/structure": "structure" }[location.hash] ?? "";
+    const page = { "#/wallet": "bonus", "#/bonus": "bonus", "#/orders": "orders", "#/transfer": "transfer", "#/structure": "structure" }[location.hash] ?? "";
     $("#h-main").hidden = Boolean(page);
     $("#h-detail").hidden = !page;
-    $("#h-bonus").hidden = page !== "bonus";
+    $("#h-wallet").hidden = page !== "bonus";
     $("#h-orders").hidden = page !== "orders";
     $("#h-transfer").hidden = page !== "transfer";
     $("#h-structure").hidden = page !== "structure";
-    $("#h-dtitle").textContent = { bonus: "Движение бонусов", orders: "История заказов", structure: "Моя структура" }[page] ?? "";
+    $("#h-dtitle").textContent = { orders: "История заказов", structure: "Моя структура" }[page] ?? "";
     if (page === "bonus" && !state.bonus) loadBonus();
     if (page === "orders" && !state.orders) loadOrders();
     if (page === "structure") loadStructure();
