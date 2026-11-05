@@ -65,7 +65,7 @@ function problem(r) {
   return j?.message || (r.status === 401 ? "Нужно войти заново" : r.status === 403 ? "Нет доступа" : `Ошибка ${r.status || "сети"}`);
 }
 
-export function createHome(root, api) {
+export function createHome(root, api, { onLogout } = {}) {
   const state = { profile: null, currency: "RUB", balance: null, points: null, pointsLoaded: false, months: [], orders: null, bonus: null, bonusMonths: 6, bonusShown: 8, ordersShown: 5, dash: null, member: null, metricsJson: null, transfer: null, transferShown: 8, struct: null, path: [] };
 
   root.innerHTML = `
@@ -401,7 +401,20 @@ export function createHome(root, api) {
       ${block("В клубе", [row("Статус", POSITIONS[p.position] ?? p.position), row("Ранг", rank), row("Максимальный ранг", max), row("Наставник", adviser)])}
       ${block("Контакты", [row("Телефон", p.phone), p.email ? `<li><span>E-mail</span><b>${mail}</b></li>` : "", row("Telegram", p.telegram), row("WhatsApp", p.whatsApp), row("Viber", p.viber)])}
       ${block("Личное", [row("Дата рождения", dmy(p.birthday)), row("Город", where)])}
-      <p class="muted pf-note">Профиль только для просмотра: менять данные нужно в кабинете на сайте.</p>`;
+      <p class="muted pf-note">Профиль только для просмотра: менять данные нужно в кабинете на сайте.</p>
+      <button class="pf-logout" type="button">Выйти</button>`;
+    root2.querySelector(".pf-logout").onclick = sheetLogout;
+  }
+
+  /** Подтверждение выхода: по iOS-привычке красная кнопка и «Отмена». */
+  function sheetLogout() {
+    const box = textBox(`<p class="muted">Чтобы снова войти, понадобятся логин и пароль.</p><div class="row2"><button class="btn ghost" type="button" data-no>Отмена</button><button class="btn pf-out" type="button" data-ok>Выйти</button></div>`);
+    box.querySelector("[data-no]").onclick = closeSheet;
+    box.querySelector("[data-ok]").onclick = async (e) => {
+      e.currentTarget.disabled = true;
+      await onLogout?.();
+    };
+    openSheet("Выйти из кабинета?", box);
   }
 
   /* ---------- данные ---------- */

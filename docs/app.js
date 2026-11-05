@@ -32,7 +32,13 @@ const store = {
 /** Запрос к API: через стенд или напрямую (см. client.js) */
 const api = request;
 
-const home = createHome($("#home"), api);
+/** Выход: сбрасываем сессию и перезагружаем страницу, чтобы данные прежнего аккаунта не остались в памяти. */
+async function signOut() {
+  await doLogout();
+  location.replace(location.pathname + location.search);
+}
+
+const home = createHome($("#home"), api, { onLogout: signOut });
 
 /* ---------- вход ---------- */
 const loginForm = $("#login-form");
@@ -60,12 +66,7 @@ loginForm.addEventListener("submit", async (e) => {
   }
 });
 
-$("#logout-btn").addEventListener("click", async () => {
-  await doLogout();
-  $("#dash-view").hidden = true;
-  $("#login-view").hidden = false;
-  say("");
-});
+$("#logout-btn").addEventListener("click", signOut);
 
 
 async function enterDashboard(info) {

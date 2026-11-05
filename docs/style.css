@@ -513,3 +513,9 @@ body:has(#dash-view:not([hidden])) { background: #f1f3f4; }
 @media (prefers-reduced-motion: reduce) {
   .sk, .rk .sk, .note.busy, .msg.busy { animation: none; }
 }
+
+/* «Выйти» в профиле: отдельная белая плашка с красным текстом, как в настройках iOS */
+.pf-logout { display: block; width: 100%; margin-top: 16px; padding: 14px; border: 0; border-radius: 16px; background: #fff; color: var(--bad); font: inherit; font-size: 1rem; font-weight: var(--fw-strong); text-align: center; cursor: pointer; box-shadow: 0 4px 18px rgba(20, 30, 40, .07); }
+.pf-logout:active { opacity: .6; }
+.btn.pf-out { background: var(--bad); }
+.btn.pf-out:hover { background: #8f1e18; }
