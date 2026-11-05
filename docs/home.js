@@ -48,12 +48,14 @@ const monthLabel = (m) => {
   const s = String(m);
   return /^\d{4}$/.test(s) ? `${MONTHS_RU[Number(s.slice(2)) - 1] ?? s.slice(2)} 20${s.slice(0, 2)}` : s;
 };
-const MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 const dmy = (iso) => (/^\d{4}-\d{2}-\d{2}/.test(String(iso)) ? `${String(iso).slice(8, 10)}.${String(iso).slice(5, 7)}.${String(iso).slice(0, 4)}` : String(iso ?? ""));
 const STATUS = { PAID: ["Оплачен", "ok"], UNPAID: ["Не оплачен", "wait"], CANCELED: ["Отменён", "bad"], CANCELLED: ["Отменён", "bad"], PARTIALLY_PAID: ["Оплачен частично", "wait"] };
 const count = (n, forms) => `${n} ${plural(n, forms)}`;
 /** «TEST TEST» → «Test Test»: имена, написанные заглавными, приводим к обычному виду. */
 const titleCase = (s) => (s && s === s.toUpperCase() ? s.toLowerCase().replace(/(^|[\s-])(\S)/g, (_, a, b) => a + b.toUpperCase()) : s);
+/** ФИО: фамилия, имя, отчество; имена капсом приводим к обычному виду. */
+const fio = (p) => titleCase([p?.surname, p?.name, p?.patronymic].filter(Boolean).join(" ")) || "Участник";
+const avatarHtml = (p) => (p?.avatar ? `<img src="${esc(p.avatar)}" alt="" referrerpolicy="no-referrer" />` : esc(initials(p)));
 const initials = (p) => [p?.name, p?.surname].filter(Boolean).map((x) => x[0]).join("").toUpperCase() || "•";
 
 /** Сообщение об ошибке из ответа API. */
@@ -69,8 +71,7 @@ export function createHome(root, api) {
   root.innerHTML = `
     <div id="h-main">
       <section class="h-user-wrap" aria-label="Участник и ранги">
-        <p class="h-user-line"><b id="h-name">—</b><span id="h-id"></span></p>
-        <p class="h-close" id="h-close"></p>
+        <a class="h-who" href="#/profile" aria-label="Открыть профиль"><span class="h-avatar" id="h-ava"></span><b id="h-name">—</b><i aria-hidden="true">${ICON.next}</i></a>
         <ul class="rkslider" id="h-ranks" tabindex="0" aria-label="Ранги"></ul>
         <div class="rkdots" id="h-dots" aria-hidden="true"></div>
       </section>
@@ -109,6 +110,7 @@ export function createHome(root, api) {
       </div>
       <section class="h-card" id="h-orders" hidden aria-label="История заказов"></section>
       <div id="h-structure" hidden></div>
+      <div id="h-profile" hidden></div>
       <div id="h-transfer" hidden>
         <section class="h-balance" aria-label="Трансферный счёт">
           <p class="h-amount" id="t-amount">—</p>
@@ -372,15 +374,37 @@ export function createHome(root, api) {
     b.onclick = () => ({ pay: sheetPay, payout: sheetPayout, points: sheetPoints, stmt: sheetStatement })[b.dataset.wact]();
   });
 
+  /* ---------- профиль участника (только чтение) ---------- */
+  const POSITIONS = { DISTRIBUTOR: "Дистрибьютор", CONSUMER: "Потребитель", CANDIDATE: "Кандидат", FRIEND: "Друг клуба" };
+  const rankLine = (code) => (code ? RANKS.find((r) => r.codes.includes(code))?.name ?? rankRu(code) : "");
+  function paintProfile() {
+    const p = state.profile;
+    const root2 = $("#h-profile");
+    if (!p) return void (root2.innerHTML = `<p class="muted">Профиль загружается…</p>`);
+    const rank = rankLine(p.fullRank || p.rank);
+    // порядок кодов — снизу вверх, как в документации API; «максимальный» показываем, только если он выше текущего
+    const LADDER = ["5*", "M", "PM", "jA", "A", "D", "SD", "GD", "ED", "DD", "DD+", "E", "SE", "SE1", "GE", "GE1", "PE", "PE1", "PE2", "PE3", "2SE", "StE"];
+    const maxCode = String(p.maxRank ?? "").split("/")[0];
+    const max = maxCode && LADDER.indexOf(maxCode) > LADDER.indexOf(p.fullRank || p.rank) ? rankLine(maxCode) : "";
+    const row = (k, v, extra = "") => (v ? `<li><span>${esc(k)}</span><b>${esc(v)}${extra}</b></li>` : "");
+    const mail = p.email ? `${esc(p.email)}${p.emailNeedConfirm || p.confirmedEmail === false ? ` <em class="pill wait">не подтверждён</em>` : ""}` : "";
+    const where = [p.address?.city, p.address?.country].filter(Boolean).join(", ");
+    const adviser = p.consultant ? titleCase([p.consultant.surname, p.consultant.name, p.consultant.patronymic].filter(Boolean).join(" ")) : "";
+    const block = (title, rows) => (rows.join("") ? `<section class="h-card"><h3>${title}</h3><ul class="pf-list">${rows.join("")}</ul></section>` : "");
+    root2.innerHTML = `
+      <section class="pf-head"><span class="h-avatar pf-ava">${avatarHtml(p)}</span><h2>${esc(fio(p))}</h2><p>Coral ID ${esc(p.id)}</p></section>
+      ${block("В клубе", [row("Статус", POSITIONS[p.position] ?? p.position), row("Ранг", rank), row("Максимальный ранг", max), row("Наставник", adviser)])}
+      ${block("Контакты", [row("Телефон", p.phone), p.email ? `<li><span>E-mail</span><b>${mail}</b></li>` : "", row("Telegram", p.telegram), row("WhatsApp", p.whatsApp), row("Viber", p.viber)])}
+      ${block("Личное", [row("Дата рождения", dmy(p.birthday)), row("Город", where)])}
+      <p class="muted pf-note">Профиль только для просмотра: менять данные нужно в кабинете на сайте.</p>`;
+  }
+
   /* ---------- данные ---------- */
   function paint() {
     const p = state.profile;
-    $("#h-name").textContent = p ? titleCase([p.name, p.surname].filter(Boolean).join(" ")) || "Участник" : "—";
-    $("#h-id").textContent = p?.id ? `Coral ID ${p.id}` : "";
-    // до закрытия месяца: считаем по календарю (месяц закрывается в последний день)
-    const now = new Date();
-    const left = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate();
-    $("#h-close").textContent = `До закрытия ${MONTHS_GEN[now.getMonth()]}: ${left === 0 ? "сегодня последний день" : count(left, ["день", "дня", "дней"])}`;
+    $("#h-name").textContent = p ? fio(p) : "—";
+    $("#h-ava").innerHTML = avatarHtml(p);
+    paintProfile();
     paintUser();
     $("#h-amount").textContent = state.balance === null ? "—" : money(state.balance, state.currency);
     $("#w-amount").textContent = $("#h-amount").textContent;
@@ -1060,14 +1084,15 @@ export function createHome(root, api) {
 
   /* ---------- переходы: главная ↔ экраны «Движение бонусов» и «История заказов» ---------- */
   function route() {
-    const page = { "#/wallet": "bonus", "#/bonus": "bonus", "#/orders": "orders", "#/transfer": "transfer", "#/structure": "structure" }[location.hash] ?? "";
+    const page = { "#/wallet": "bonus", "#/bonus": "bonus", "#/profile": "profile", "#/orders": "orders", "#/transfer": "transfer", "#/structure": "structure" }[location.hash] ?? "";
     $("#h-main").hidden = Boolean(page);
     $("#h-detail").hidden = !page;
     $("#h-wallet").hidden = page !== "bonus";
     $("#h-orders").hidden = page !== "orders";
     $("#h-transfer").hidden = page !== "transfer";
     $("#h-structure").hidden = page !== "structure";
-    $("#h-dtitle").textContent = { orders: "История заказов", structure: "Моя структура" }[page] ?? "";
+    $("#h-profile").hidden = page !== "profile";
+    $("#h-dtitle").textContent = { orders: "История заказов", structure: "Моя структура", profile: "Профиль" }[page] ?? "";
     if (page === "bonus" && !state.bonus) loadBonus();
     if (page === "orders" && !state.orders) loadOrders();
     if (page === "structure") loadStructure();

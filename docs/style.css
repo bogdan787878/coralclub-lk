@@ -163,9 +163,6 @@ body:has(#dash-view:not([hidden])) { background: #f1f3f4; }
 .h-top { display: flex; align-items: center; gap: 12px; }
 .h-avatar { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #ffd35a, #f29a1f); color: #fff; font-weight: 700; display: grid; place-items: center; overflow: hidden; flex: none; }
 .h-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.h-who { display: flex; flex-direction: column; line-height: 1.25; }
-.h-who b { font-size: .95rem; }
-.h-who span { font-size: .8rem; color: var(--muted); }
 .h-balance { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 56px 0 40px; gap: 6px; }
 .h-tag { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 999px; background: #3b3b3e; color: #fff; font: inherit; font-size: .8rem; font-weight: 600; padding: 4px 11px; cursor: default; }
 .h-tag svg { width: 14px; height: 12px; }
@@ -258,9 +255,6 @@ body:has(#dash-view:not([hidden])) { background: #f1f3f4; }
 
 /* компактная карточка участника: имя, ранг, условия */
 .h-user { background: #8b6a41; color: #fff; border-radius: 28px; padding: 18px 20px 20px; }
-.h-user-line { margin: 0 0 10px; padding: 0 4px; color: #2b2b2e; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: .95rem; }
-.h-user-line b { font-weight: 500; }
-.h-user-line span { color: #8a96a3; }
 .h-rank { margin: 2px 0 18px; font-size: 1.75rem; line-height: 2.1rem; font-weight: 500; letter-spacing: -.01em; }
 .h-crit { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 .h-crit li { background: rgba(255, 255, 255, .2); color: #fff; border-radius: 14px; padding: 8px 4px; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-align: center; }
@@ -396,9 +390,6 @@ body:has(#dash-view:not([hidden])) { background: #f1f3f4; }
 #h-wallet .h-head h3 { white-space: nowrap; }
 #h-wallet .seg button { white-space: nowrap; }
 
-.h-user-line { margin-bottom: 2px; }
-.h-close { margin: 0 0 12px; padding: 0 4px; color: var(--muted); font-size: .82rem; }
-.h-close:empty { display: none; }
 
 /* карточки рангов: название, строка цели со шкалой, инфо-кнопка с чек-листом */
 .rk-info { border: 0; background: none; color: #fff; padding: 0; margin: -2px -4px 0 0; width: 32px; height: 32px; display: grid; place-items: center; cursor: pointer; opacity: .9; flex: none; }
@@ -437,3 +428,24 @@ body:has(#dash-view:not([hidden])) { background: #f1f3f4; }
 /* подсказки поверх страницы */
 .hint-pop { position: fixed; z-index: 60; background: #2b2b2e; color: #fff; border-radius: 12px; padding: 10px 12px; font-size: .8rem; line-height: 1.15rem; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); pointer-events: auto; }
 .mi[aria-expanded="true"] { background: #2b2b2e; color: #fff; }
+
+/* шапка: аватар и ФИО, клик открывает профиль */
+.h-who { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 0 4px; color: #2b2b2e; text-decoration: none; }
+.h-who .h-avatar { width: 40px; height: 40px; font-size: .95rem; }
+.h-who b { font-weight: 600; font-size: 1rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h-who i { display: grid; width: 18px; height: 18px; color: #8a96a3; flex: none; }
+.h-who i svg { width: 16px; height: 16px; }
+
+/* профиль */
+.pf-head { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; padding: 4px 0 20px; }
+.pf-head h2 { margin: 8px 0 0; font-size: 1.35rem; }
+.pf-head p { margin: 0; color: var(--muted); }
+.h-avatar.pf-ava { width: 88px; height: 88px; font-size: 1.6rem; }
+#h-profile .h-card { margin-bottom: 10px; }
+#h-detail #h-profile .h-card h3 { display: block; }
+.pf-list { list-style: none; margin: 0; padding: 0; }
+.pf-list li { display: flex; justify-content: space-between; gap: 16px; padding: 11px 0; border-top: 1px solid #edf0f2; }
+.pf-list li:first-child { border-top: 0; }
+.pf-list span { color: var(--muted); flex: none; }
+.pf-list b { font-weight: 500; text-align: right; word-break: break-word; }
+.pf-note { text-align: center; font-size: .8rem; }
