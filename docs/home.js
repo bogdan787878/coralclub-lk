@@ -81,9 +81,10 @@ export function createHome(root, api) {
           <span class="h-caption">Счёт основной<i aria-hidden="true">${ICON.next}</i></span>
         </button>
       </section>
-      <nav class="h-actions" aria-label="Быстрые действия">
+      <nav class="h-actions h-actions-4" aria-label="Быстрые действия">
         <button class="h-act" data-act="points" type="button"><span>${ICON.points}</span>Перевод баллов</button>
         <button class="h-act" data-act="bonus" type="button"><span>${ICON.bonus}</span>Перевод бонусов</button>
+        <button class="h-act" data-act="payout" type="button"><span>${ICON.card}</span>Вывести на карту</button>
         <button class="h-act" data-act="invite" type="button"><span>${ICON.invite}</span>Пригласить в клуб</button>
       </nav>
       <a class="h-link" href="#/orders"><span class="h-link-ic" aria-hidden="true">${ICON.bag}</span><span class="h-link-text"><b>История заказов</b><span>Все заказы и их статусы</span></span></a>
@@ -286,7 +287,7 @@ export function createHome(root, api) {
   }
 
   root.querySelectorAll(".h-act").forEach((b) => {
-    b.onclick = () => ({ points: sheetPoints, bonus: sheetBonus, invite: sheetInvite })[b.dataset.act]();
+    b.onclick = () => ({ points: sheetPoints, bonus: sheetBonus, payout: sheetPayout, invite: sheetInvite })[b.dataset.act]();
   });
 
   $("#h-tag").onclick = () => {
@@ -321,11 +322,12 @@ export function createHome(root, api) {
     const url = typeof link.json?.data === "string" ? link.json.data : link.json?.data?.url || link.json?.data?.link || "";
     const raw = list.json?.data;
     const items = Array.isArray(raw) ? raw : Array.isArray(raw?.items) ? raw.items : [];
+    const PAY_STATUS = { cancel: "Отменена", canceled: "Отменена", cancelled: "Отменена", rejected: "Отклонена", new: "Создана", processing: "В обработке", approved: "Одобрена", paid: "Выплачена", done: "Выплачена" };
+    const day = (v) => (/^\d{8}$/.test(String(v)) ? `${String(v).slice(6, 8)}.${String(v).slice(4, 6)}.${String(v).slice(0, 4)}` : dmy(String(v ?? "").slice(0, 10)));
     const rows = items.slice(0, 5).map((i) => {
-      const sum = Number(i.amount ?? i.sum ?? i.total ?? NaN);
-      const when = dmy(String(i.createdAt ?? i.date ?? i.created ?? "").slice(0, 10));
-      const st = i.statusName ?? i.status ?? "";
-      return `<li class="h-row"><div class="h-main"><b>Заявка${i.id ? ` № ${esc(i.id)}` : ""}</b><span>${esc([when, st].filter(Boolean).join(" · "))}</span></div>${Number.isFinite(sum) ? `<span class="h-sum">${esc(money(sum, i.currency || state.currency))}</span>` : ""}</li>`;
+      const sum = Number(i.payableAmount ?? i.amount ?? i.sum ?? i.total ?? NaN);
+      const st = PAY_STATUS[String(i.status ?? "").toLowerCase()] ?? i.statusName ?? i.status ?? "";
+      return `<li class="h-row"><div class="h-main"><b>Заявка${i.id ? ` № ${esc(i.id)}` : ""}</b><span>${esc([day(i.date ?? i.createdAt), st, i.name].filter(Boolean).join(" · "))}</span></div>${Number.isFinite(sum) ? `<span class="h-sum">${esc(money(sum, i.currency || state.currency))}</span>` : ""}</li>`;
     });
     const status = !avail.ok ? `<p class="note bad">Не удалось проверить доступность выплат: ${esc(problem(avail))}</p>` : available ? "" : `<p class="note">Выплата бонусов для этого аккаунта недоступна: раздел работает только для участников из России, при выполнении условий.</p>`;
     box.innerHTML = `<p class="muted">Доступно: <b>${esc(have)}</b></p>${status}${url && (available || !avail.ok) ? `<a class="btn" href="${esc(url)}" target="_blank" rel="noopener">Оформить заявку в кабинете</a>` : ""}${rows.length ? `<h3 class="sheet-sub">Мои заявки</h3><ul class="h-list">${rows.join("")}</ul>` : list.ok ? `<p class="muted">Заявок на выплату пока нет.</p>` : ""}`;
