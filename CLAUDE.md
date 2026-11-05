@@ -36,4 +36,4 @@
 
 ## Где что лежит (если спросят)
 
-`server.mjs` (маленький сервер: вход и запросы к магазину), `public/` (экран входа и главная: `home.js`, `metrics.js`, `app.js`), `public/config.json` (адрес магазина и параметры сессии API), `public/client.js` (связь с API: через сервер или напрямую), `README.md`.
+`server.mjs` (маленький сервер: вход и запросы к магазину), `docs/` (экран входа и главная: `home.js`, `metrics.js`, `app.js`), `docs/config.json` (адрес магазина и параметры сессии API), `docs/client.js` (связь с API: через сервер или напрямую), `README.md`.

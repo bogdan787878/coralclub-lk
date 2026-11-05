@@ -9,7 +9,7 @@
  *                  сохраняются и не пишутся в лог), затем сессия API (auth/session);
  *  - /api/...    — запросы к /restApi/(proxyCC4|auth|registration)/... магазина с
  *                  куками и токеном этой сессии;
- *  - остальное   — статика из public/.
+ *  - остальное   — статика из docs/.
  * Сессия живёт в памяти процесса: перезапуск = выход. Слушает только 127.0.0.1.
  */
 import http from "node:http";
@@ -21,7 +21,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const CONFIG = JSON.parse(await readFile(path.join(ROOT, "public", "config.json"), "utf8"));
+const CONFIG = JSON.parse(await readFile(path.join(ROOT, "docs", "config.json"), "utf8"));
 const PORT = Number(process.env.LK_PORT ?? 3300);
 /** По умолчанию только этот компьютер. Для проверки с телефона в той же сети: LK_HOST=0.0.0.0 */
 const BIND = process.env.LK_HOST ?? "127.0.0.1";
@@ -218,8 +218,8 @@ const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", "
 
 async function serveStatic(res, pathname) {
   const rel = pathname === "/" ? "/index.html" : pathname;
-  const file = path.join(ROOT, "public", path.normalize(rel).replace(/^(\.\.[/\\])+/, ""));
-  if (!file.startsWith(path.join(ROOT, "public"))) return json(res, 403, { error: "forbidden" });
+  const file = path.join(ROOT, "docs", path.normalize(rel).replace(/^(\.\.[/\\])+/, ""));
+  if (!file.startsWith(path.join(ROOT, "docs"))) return json(res, 403, { error: "forbidden" });
   try {
     const data = await readFile(file);
     res.writeHead(200, { "content-type": TYPES[path.extname(file)] ?? "application/octet-stream", "cache-control": "no-store" });
