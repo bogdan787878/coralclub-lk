@@ -131,7 +131,7 @@ export function createHome(root, api, { onLogout } = {}) {
   /* ---------- шимер: заглушки на время загрузки ---------- */
   const skLines = (n = 3) => `<div class="sk-lines" role="status" aria-label="Загрузка">${Array.from({ length: n }, (_, i) => `<i class="sk" style="width:${[92, 74, 58][i % 3]}%"></i>`).join("")}</div>`;
   const skRows = (n = 3) => `<ul class="sk-rows" role="status" aria-label="Загрузка">${Array.from({ length: n }, () => `<li><i class="sk sk-dot"></i><span><i class="sk" style="width:62%"></i><i class="sk" style="width:38%"></i></span><i class="sk sk-sum"></i></li>`).join("")}</ul>`;
-  const skTiles = (title, n = 4) => `<div class="mtop"><h2 class="mtitle">${title}</h2></div><div class="mgrid" role="status" aria-label="Загрузка">${Array.from({ length: n }, () => `<div class="mcard sk-card"><i class="sk" style="width:70%"></i><i class="sk sk-big"></i><i class="sk" style="width:50%"></i></div>`).join("")}</div>`;
+  const skTiles = (title, n = 4, cls = "") => `<div class="mtop"><h2 class="mtitle">${title}</h2></div><div class="mgrid ${cls}" role="status" aria-label="Загрузка">${Array.from({ length: n }, () => `<div class="mcard sk-card"><i class="sk" style="width:70%"></i><i class="sk sk-big"></i><i class="sk" style="width:50%"></i></div>`).join("")}</div>`;
 
   /* ---------- нижний лист ---------- */
   const sheet = $("#sheet");
@@ -1058,7 +1058,7 @@ export function createHome(root, api, { onLogout } = {}) {
   /** Каждый кусок экрана рисуется, как только пришёл его ответ: один медленный запрос не прячет остальное. */
   async function load() {
     // пока данные едут, показываем шимер; при повторной загрузке не мигаем уже нарисованным
-    if (!state.metricsJson) metricsRoot.innerHTML = skTiles("МОИ ПОКАЗАТЕЛИ");
+    if (!state.metricsJson) metricsRoot.innerHTML = skTiles("МОИ ПОКАЗАТЕЛИ", 3, "mcar");
     if (!state.tasks) {
       tasksRoot.hidden = false;
       tasksRoot.innerHTML = skTiles("ЗАДАЧИ", 2);
