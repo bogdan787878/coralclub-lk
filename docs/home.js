@@ -46,6 +46,7 @@ const monthLabel = (m) => {
   const s = String(m);
   return /^\d{4}$/.test(s) ? `${MONTHS_RU[Number(s.slice(2)) - 1] ?? s.slice(2)} 20${s.slice(0, 2)}` : s;
 };
+const MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 const dmy = (iso) => (/^\d{4}-\d{2}-\d{2}/.test(String(iso)) ? `${String(iso).slice(8, 10)}.${String(iso).slice(5, 7)}.${String(iso).slice(0, 4)}` : String(iso ?? ""));
 const STATUS = { PAID: ["Оплачен", "ok"], UNPAID: ["Не оплачен", "wait"], CANCELED: ["Отменён", "bad"], CANCELLED: ["Отменён", "bad"], PARTIALLY_PAID: ["Оплачен частично", "wait"] };
 const count = (n, forms) => `${n} ${plural(n, forms)}`;
@@ -67,6 +68,7 @@ export function createHome(root, api) {
     <div id="h-main">
       <section class="h-user-wrap" aria-label="Участник и ранги">
         <p class="h-user-line"><b id="h-name">—</b><span id="h-id"></span></p>
+        <p class="h-close" id="h-close"></p>
         <ul class="rkslider" id="h-ranks" tabindex="0" aria-label="Ранги"></ul>
         <div class="rkdots" id="h-dots" aria-hidden="true"></div>
       </section>
@@ -369,6 +371,10 @@ export function createHome(root, api) {
     const p = state.profile;
     $("#h-name").textContent = p ? titleCase([p.name, p.surname].filter(Boolean).join(" ")) || "Участник" : "—";
     $("#h-id").textContent = p?.id ? `Coral ID ${p.id}` : "";
+    // до закрытия месяца: считаем по календарю (месяц закрывается в последний день)
+    const now = new Date();
+    const left = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate();
+    $("#h-close").textContent = `До закрытия ${MONTHS_GEN[now.getMonth()]}: ${left === 0 ? "сегодня последний день" : count(left, ["день", "дня", "дней"])}`;
     paintUser();
     $("#h-amount").textContent = state.balance === null ? "—" : money(state.balance, state.currency);
     $("#w-amount").textContent = $("#h-amount").textContent;

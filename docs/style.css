@@ -407,3 +407,7 @@ body:has(#dash-view:not([hidden])) { background: #f1f3f4; }
 .sheet-form .seg { align-self: flex-start; }
 #h-wallet .h-head h3 { white-space: nowrap; }
 #h-wallet .seg button { white-space: nowrap; }
+
+.h-user-line { margin-bottom: 2px; }
+.h-close { margin: 0 0 12px; padding: 0 4px; color: var(--muted); font-size: .82rem; }
+.h-close:empty { display: none; }
