@@ -4,6 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ЛК Coral Club · тестовый стенд</title>
+  <script>
+    // Кабинет переехал в монорепозиторий на Next (/coralclub/lk/). На GitHub Pages старый адрес ведёт туда же,
+    // в тот же раздел; локальный стенд (server.mjs) по-прежнему открывает этот кабинет на чистом JS.
+    (function () {
+      if (!/github\.io$/.test(location.hostname)) return;
+      var map = { "#/me": "me/", "#/catalog": "catalog/", "#/cart": "cart/", "#/fav": "fav/", "#/checkout": "checkout/", "#/wallet": "wallet/", "#/bonus": "wallet/", "#/transfer": "transfer/", "#/orders": "orders/", "#/structure": "structure/", "#/profile": "profile/" };
+      location.replace("/coralclub/lk/" + (map[location.hash] || ""));
+    })();
+  </script>
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="friend.css" />
 </head>
