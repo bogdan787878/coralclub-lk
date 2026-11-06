@@ -7,7 +7,7 @@ import { computeTasks, lineLabel, personName, rankName } from "./tasks.js";
 import { createShop } from "./shop.js";
 import { createCheckout } from "./checkout.js";
 import { mountCountryMenu } from "./country.js";
-import { ensureLayout, openLayoutCart } from "./layout-bridge.js";
+import { ensureLayout, mountCartApp } from "./layout-bridge.js";
 
 const P = "/restApi/proxyCC4";
 const tz = String(new Date().getTimezoneOffset()); // как просит API: минуты смещения, например -180
@@ -102,6 +102,7 @@ export function createHome(root, api, { onLogout, shopRequest, shopReady, shopCo
       <section class="home-metrics metrics" id="metrics"></section>
       <section class="home-metrics metrics" id="tasks" hidden></section>
     </div>
+    <div id="h-cartapp" class="cartapp" hidden></div>
     <div id="h-shopwrap" hidden><div class="shop-bar"><span class="shop-brand">Coral Club</span><div id="country-shop"></div></div><div id="h-shop" class="shop"></div></div>
     <div id="h-detail" hidden>
       <header class="h-dhead"><a class="h-back" href="#/me" aria-label="Назад">${ICON.back}<span>Назад</span></a><h2 id="h-dtitle"></h2><div class="h-dside" id="country-detail" hidden></div></header>
@@ -1143,22 +1144,22 @@ export function createHome(root, api, { onLogout, shopRequest, shopReady, shopCo
     let tab = page ? "" : { "#/catalog": "catalog", "#/cart": "cart", "#/fav": "fav", "#/me": "me" }[location.hash] ?? "shop";
     // общее меню и корзина из Layout: корзина там выдвижная, своя страница корзины не нужна
     const layout = state.ready ? ensureLayout({ enabled: useLayout, onCartChanged: () => shop.refreshCart() }) : null;
-    if (layout && tab === "cart") {
-      tab = "shop";
-      history.replaceState(null, "", "#/");
-      openLayoutCart();
-    }
+    // корзина — отдельное приложение (<cc-cart>) на своей странице, а не страница магазина кабинета
+    const cartApp = Boolean(layout) && tab === "cart";
+    $("#h-cartapp").hidden = !cartApp;
+    if (cartApp) mountCartApp($("#h-cartapp"));
     $("#h-main").hidden = tab !== "me";
-    $("#h-shopwrap").hidden = !["shop", "catalog", "cart", "fav"].includes(tab);
+    $("#h-shopwrap").hidden = !["shop", "catalog", "cart", "fav"].includes(tab) || cartApp;
     $("#country-detail").hidden = page !== "checkout"; // страна сквозная, кроме профиля и страниц кабинета
     $("#tabbar").hidden = Boolean(page) || Boolean(layout);
     document.body.classList.toggle("has-tabbar", !page && !layout);
     if (layout) {
       layout.setAttribute("parts", page ? "" : "tabbar");
-      layout.setAttribute("active", { shop: "home", catalog: "catalog", fav: "fav", me: "me" }[tab] ?? "");
+      layout.setAttribute("active", { shop: "home", catalog: "catalog", cart: "cart", fav: "fav", me: "me" }[tab] ?? "");
     }
     root.querySelectorAll("#tabbar a").forEach((a) => a.classList.toggle("on", a.dataset.tab === tab));
     if (state.ready && !$("#h-shopwrap").hidden) shop.show(tab);
+    if (cartApp) window.coralCart?.refresh();
     $("#h-detail").hidden = !page;
     $("#h-wallet").hidden = page !== "bonus";
     $("#h-orders").hidden = page !== "orders";

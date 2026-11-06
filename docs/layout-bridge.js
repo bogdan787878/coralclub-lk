@@ -1,5 +1,5 @@
-// Общий Layout продукта (<cc-layout>: нижнее меню и корзина) в кабинете. Это отдельный сервис из coral-club-shop
-// (пакет @coral/layout), он подключается по адресу. Работает в прямом режиме (токен в sessionStorage, как на GitHub Pages);
+// Общие микрофронтенды продукта в кабинете: Layout (<cc-layout>: нижнее меню с бейджем корзины) и приложение корзины
+// (<cc-cart>: отдельная страница корзины). Оба из coral-club-shop (пакеты @coral/layout и @coral/cart), подключаются по адресу. Работает в прямом режиме (токен в sessionStorage, как на GitHub Pages);
 // на стенде со своей серверной сессией Layout токена не видит, там остаётся собственное меню кабинета.
 const devSrc = () => {
   try {
@@ -8,8 +8,11 @@ const devSrc = () => {
     return null;
   }
 };
-const SRC = devSrc() ?? (location.hostname.endsWith("github.io") ? "/coralclub/layout/layout.js" : "https://bogdan787878.github.io/coralclub/layout/layout.js");
-const LINKS = { home: "#/", catalog: "#/catalog", fav: "#/fav", me: "#/me", checkout: "#/checkout", login: "./" };
+const BASE = location.hostname.endsWith("github.io") ? "/coralclub" : "https://bogdan787878.github.io/coralclub";
+const SRC = devSrc() ?? `${BASE}/layout/layout.js`;
+const CART_SRC = (devSrc() ?? "").replace(/layout\/layout\.js$/, "cart/cart.js") || `${BASE}/cart/cart.js`;
+const LINKS = { home: "#/", catalog: "#/catalog", cart: "#/cart", fav: "#/fav", me: "#/me" };
+const CART_LINKS = { checkout: "#/checkout", shop: "#/catalog", login: "./" };
 
 let el = null;
 let failed = false;
@@ -36,6 +39,19 @@ export function ensureLayout({ enabled, onCartChanged }) {
   return el;
 }
 
+let cartEl = null;
+/** Приложение корзины в контейнере страницы корзины (один раз; cart.js грузится по адресу). */
+export function mountCartApp(box) {
+  if (cartEl) return cartEl;
+  cartEl = document.createElement("cc-cart");
+  cartEl.setAttribute("links", JSON.stringify(CART_LINKS));
+  box.appendChild(cartEl);
+  const s = document.createElement("script");
+  s.src = CART_SRC;
+  s.defer = true;
+  document.head.appendChild(s);
+  return cartEl;
+}
+
 /** Кабинет сам изменил корзину (добавил товар и т. п.): пусть Layout перечитает её. */
 export const cartChangedHere = () => window.dispatchEvent(new Event("cc:cart:refresh"));
-export const openLayoutCart = () => customElements.whenDefined("cc-layout").then(() => window.coralLayout?.cart.open());
