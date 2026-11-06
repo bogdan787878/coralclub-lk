@@ -48,6 +48,11 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
   const country = () => getCountry();
 
   /* ---------- производные величины (как в «Друге клуба») ---------- */
+  // регион, как его пишет справочник магазина («Республика Татарстан»): без него доставка в РФ не считается
+  // («Ошибка получения доступных методов доставки»). Город вместо региона годится только для городов-регионов.
+  const CITY_REGIONS = /^(москва|санкт-петербург|севастополь)$/i;
+  const area = () => form.region.trim() || (country() !== "RU" || CITY_REGIONS.test(form.city.trim()) ? form.city.trim() : "");
+  const needsRegion = () => country() === "RU" && Boolean(form.city.trim()) && !area();
   const place = () => (form.city.trim() ? `${country()}|${form.city.trim()}|${form.region.trim()}` : "");
   const deliveryKey = () => `${shop.lines().map((l) => `${l.code}:${l.qty}`).join(",")}|${place()}`;
   const slotsOf = (key) => (key === "moscow" ? st.slotCfg.moscow : st.slotCfg.spb);
@@ -76,9 +81,9 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
     const base = { COUNTRY: country(), COUNTRY_NAME: countryName(), EMAIL: form.email.trim(), FIO: form.fio.trim(), PHONE: form.phone.replace(/[^0-9+]/g, "") };
     if (isPickup()) {
       const p = point();
-      return { ...base, CITY: form.city.trim(), AREA: form.region.trim() || form.city.trim(), STREET: p?.ADDRESS ?? "", DELIVERY_TYPE: active()?.TYPE ?? "PICK_POINT", PICK_POINT_SERVICE: p?.TYPE ?? "", PICK_POINT_CODE: p?.CODE ?? "" };
+      return { ...base, CITY: form.city.trim(), AREA: area(), STREET: p?.ADDRESS ?? "", DELIVERY_TYPE: active()?.TYPE ?? "PICK_POINT", PICK_POINT_SERVICE: p?.TYPE ?? "", PICK_POINT_CODE: p?.CODE ?? "" };
     }
-    return { ...base, CITY: form.city.trim(), AREA: form.region.trim() || form.city.trim(), STREET: form.street, BUILD: form.build, APARTMENT: form.apartment.trim(), POSTINDEX: form.zip.trim(), DELIVERY_TYPE: active()?.TYPE ?? "COURIER" };
+    return { ...base, CITY: form.city.trim(), AREA: area(), STREET: form.street, BUILD: form.build, APARTMENT: form.apartment.trim(), POSTINDEX: form.zip.trim(), DELIVERY_TYPE: active()?.TYPE ?? "COURIER" };
   };
 
   /* ---------- загрузка ---------- */
@@ -106,7 +111,14 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
     st.deliveryFor = "";
     paintShip();
     if (!place()) return;
-    const r = await sv("/delivery", { COUNTRY: country(), CITY: form.city.trim(), AREA: form.region.trim() || form.city.trim() });
+    if (needsRegion()) {
+      st.groups = [];
+      st.deliveryErr = "Укажите регион, например «Республика Татарстан» или «Московская область».";
+      st.deliveryFor = key;
+      paintDelivery();
+      return paintShip();
+    }
+    const r = await sv("/delivery", { COUNTRY: country(), CITY: form.city.trim(), AREA: area() });
     if (key !== deliveryKey()) return;
     window.__shopDebug = { ...(window.__shopDebug ?? {}), delivery: r.json };
     // магазин сам сообщает допустимые оплаты у способа доставки (PAYSYSTEMS): убираем те, где только наличные
@@ -134,7 +146,7 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
     const key = `${id}|${place()}`;
     st.paymentsFor = "";
     paintPay();
-    const r = await sv("/payments", { deliveryId: id, COUNTRY: country(), CITY: form.city.trim(), AREA: form.region.trim() || form.city.trim() });
+    const r = await sv("/payments", { deliveryId: id, COUNTRY: country(), CITY: form.city.trim(), AREA: area() });
     if (key !== `${deliveryId()}|${place()}`) return;
     window.__shopDebug = { ...(window.__shopDebug ?? {}), payments: r.json };
     st.payments = onlineOnly(Array.isArray(r.json?.result) ? r.json.result : []);
@@ -150,7 +162,7 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
     const key = `${form.region}|${form.city}`;
     st.pointsFor = "";
     paintDelivery();
-    const r = await sv("/pickpoints", { COUNTRY: country(), CITY: form.city.trim(), AREA: form.region.trim() || form.city.trim() });
+    const r = await sv("/pickpoints", { COUNTRY: country(), CITY: form.city.trim(), AREA: area() });
     if (key !== `${form.region}|${form.city}`) return;
     window.__shopDebug = { ...(window.__shopDebug ?? {}), pickpoints: r.json };
     st.points = Array.isArray(r.json?.result) ? r.json.result : [];
@@ -167,7 +179,7 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
     if (!id || !st.paymentId || !place()) return;
     const key = `${id}|${st.paymentId}|${place()}|${st.promo}|${st.bonus}|${point()?.CODE ?? ""}`;
     totalsTimer = setTimeout(async () => {
-      const r = await sv("/order", { bonusUseValue: st.bonus, promo: st.promo, deliveryId: id, paymentId: st.paymentId, pickPoint: point() ? point().CODE : false, COUNTRY: country(), CITY: form.city.trim(), AREA: form.region.trim() || form.city.trim(), PROFILE: profileObj(), dutyEnabled: true });
+      const r = await sv("/order", { bonusUseValue: st.bonus, promo: st.promo, deliveryId: id, paymentId: st.paymentId, pickPoint: point() ? point().CODE : false, COUNTRY: country(), CITY: form.city.trim(), AREA: area(), PROFILE: profileObj(), dutyEnabled: true });
       if (key !== `${deliveryId()}|${st.paymentId}|${place()}|${st.promo}|${st.bonus}|${point()?.CODE ?? ""}`) return;
       window.__shopDebug = { ...(window.__shopDebug ?? {}), totals: r.json };
       if (r.json?.result) {
@@ -185,7 +197,7 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
     if (!code || !deliveryId()) return;
     st.promoMsg = "";
     // расчёт заказа отвечает 500 на неизвестный код, поэтому сначала спрашиваем отдельным методом
-    const r = await sv("/promo", { promo: code, deliveryId: deliveryId(), COUNTRY: country(), CITY: form.city.trim(), AREA: form.region.trim() || form.city.trim() });
+    const r = await sv("/promo", { promo: code, deliveryId: deliveryId(), COUNTRY: country(), CITY: form.city.trim(), AREA: area() });
     const discount = r.json?.result && typeof r.json.result === "object" ? num(r.json.result.DISCOUNT) : 0;
     if (discount > 0) {
       st.promo = code;
@@ -199,7 +211,18 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
   }
 
   /* ---------- отрисовка: мелкие блоки ---------- */
-  const spinner = (text) => `<p class="ck-loader" role="status"><span class="ck-spinner" aria-hidden="true"></span>${esc(text)}</p>`;
+  // загрузка блока — шимер (как во всём кабинете); подпись читает экранный диктор
+  const spinner = (text, n = 2) =>
+    `<div class="ck-skel" role="status" aria-label="${esc(text)}">${Array.from({ length: n }, (_, i) => `<i class="sk" style="width:${[100, 72, 86][i % 3]}%"></i>`).join("")}</div>`;
+  /** Шимер всей страницы оформления, пока магазин готовит заказ: те же блоки, что у формы, и итог справа на десктопе. */
+  const pageSkeleton = (text) => {
+    const field = `<i class="sk ck-skField"></i>`;
+    const block = (fields) => `<section class="ck-section"><i class="sk ck-skHead"></i>${field.repeat(fields)}</section>`;
+    return `<div class="ck-layout" role="status" aria-label="${esc(text)}">
+      <div class="ck-main"><i class="sk ck-skTitle"></i>${block(2)}${block(3)}${block(2)}${block(1)}</div>
+      <aside class="ck-skSide"><i class="sk ck-skHead"></i><i class="sk"></i><i class="sk" style="width:70%"></i><i class="sk ck-skField"></i></aside>
+    </div>`;
+  };
   const float = (name, label, o = {}) => `
     <div class="lc-float" data-field="${name}">
       <div class="lc-floatBox${o.attention ? " lc-floatBoxActive" : ""}${o.error ? " ck-errorBox" : ""}${o.combo ? " ck-combo" : ""}">
@@ -215,8 +238,8 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
     const pickup = isPickup();
     return [
       ...(pickup
-        ? [{ key: "city", bad: !form.city.trim() }, { key: "point", bad: !point() }]
-        : [{ key: "address", bad: form.manual || !addressSearchEnabled() ? !form.street.trim() || !form.build.trim() : !form.picked }, { key: "zip", bad: form.zip.trim().length < 5 }, { key: "city", bad: !form.city.trim() }]),
+        ? [{ key: "city", bad: !form.city.trim() }, { key: "region", bad: needsRegion() }, { key: "point", bad: !point() }]
+        : [{ key: "address", bad: form.manual || !addressSearchEnabled() ? !form.street.trim() || !form.build.trim() : !form.picked }, { key: "zip", bad: form.zip.trim().length < 5 }, { key: "city", bad: !form.city.trim() }, { key: "region", bad: needsRegion() }]),
       { key: "fio", bad: form.fio.trim().length < 3 },
       { key: "phone", bad: form.phone.replace(/\D/g, "").length < 10 },
       { key: "email", bad: !/\S+@\S+\.\S+/.test(form.email) },
@@ -250,10 +273,12 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
       html += `<div class="ck-addLines">${addressSearchEnabled() ? (form.manual ? `<button type="button" class="ck-addLine" data-act="search-mode">Искать адрес</button>` : `<button type="button" class="ck-addLine" data-act="manual-mode">Ввести адрес вручную</button>`) : ""}</div>`;
       if (form.manual || !addressSearchEnabled() || form.apartment) html += float("apartment", "Квартира, подъезд (необязательно)", { autoComplete: "address-line2" });
       if (form.manual || !addressSearchEnabled()) {
-        html += `<div class="ck-row">${float("zip", "Индекс", { inputMode: "numeric", autoComplete: "postal-code", error: isBad("zip") })}${float("city", "Город", { autoComplete: "address-level2", error: isBad("city") })}</div>${float("region", "Регион (необязательно)", { autoComplete: "address-level1" })}`;
+        html += `<div class="ck-row">${float("zip", "Индекс", { inputMode: "numeric", autoComplete: "postal-code", error: isBad("zip") })}${float("city", "Город", { autoComplete: "address-level2", error: isBad("city") })}</div>${float("region", needsRegion() || isBad("region") ? "Регион, например Республика Татарстан" : "Регион (необязательно)", { autoComplete: "address-level1", error: isBad("region") })}`;
       }
     } else {
       html += float("city", "Город", { autoComplete: "address-level2", error: isBad("city") });
+      // самовывоз: без региона магазин не найдёт пункты в городе, который сам не регион
+      if (needsRegion() || form.region) html += float("region", "Регион, например Республика Татарстан", { autoComplete: "address-level1", error: isBad("region") });
       const p = point();
       const svc = pickupItems().find((i) => i.ID === p?.TYPE);
       const loadingPoints = form.city.trim() && st.pointsFor !== `${form.region}|${form.city}`;
@@ -647,7 +672,7 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
     const pay = payment();
     const online = pay && !CASHLIKE.test(pay.NAME); // карта, СБП, SberPay, ЮMoney: открывается шлюз по стране
     if (online) {
-      set(`<div class="ck-page ck-empty">${spinner("Заказ оформлен. Переходим к оплате…")}</div>`);
+      set(`<div class="ck-page ck-empty"><p class="ck-host">Заказ оформлен. Переходим к оплате…</p>${spinner("Переходим к оплате", 3)}</div>`);
       const t = await gatewayTarget();
       if (t) return goToGateway(t);
       // банк не нашли: не уводим на сайт магазина (там нет сессии, будет страница входа), показываем повтор
@@ -779,7 +804,7 @@ export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop,
     if (!shopReady()) {
       return set(`<div class="ck-page ck-empty"><p class="ck-host">Оформление внутри ЛК работает при запуске стенда через <b>npm start</b>: магазин принимает такие запросы только по своей сессии.</p><a class="ck-backLink" href="#/cart">Назад в корзину</a></div>`);
     }
-    set(`<div class="ck-page">${spinner("Готовим заказ…")}</div>`);
+    set(`<div class="ck-page">${pageSkeleton("Готовим заказ…")}</div>`);
     // ключ поиска адреса Google отдаёт стенд (из GOOGLE_PLACES_KEY / .env.local), в репозитории его нет
     setPlacesKey((await shopConfig()).placesKey);
     const w = who();

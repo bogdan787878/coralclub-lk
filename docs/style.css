@@ -182,6 +182,18 @@ pre { margin: 0; font-size: .8rem; white-space: pre-wrap; word-break: break-word
 
 /* ---------- главная в духе банковского приложения ---------- */
 body:has(#dash-view:not([hidden])) { background: #f1f3f4; --cc-page-bg: #f1f3f4; }
+/* оформление заказа во всю ширину и на белом фоне (вёрстка «Друга клуба»: на десктопе две колонки) */
+body.ck-full, body.ck-full:has(#dash-view:not([hidden])) { background: #fff; --cc-page-bg: #fff; }
+body.ck-full .home { max-width: none; padding: 0 0 48px; }
+body.ck-full .h-dhead { margin: 0; padding: 0 8px; background: rgba(255, 255, 255, .9); }
+/* шимер оформления: блоки той же высоты, что поля формы */
+.ck-skel { display: flex; flex-direction: column; gap: 10px; padding: 4px 0; }
+.ck-skel .sk { height: 14px; }
+.ck-skTitle { width: 60%; height: 28px !important; }
+.ck-skHead { width: 40%; height: 18px !important; margin-bottom: 12px; }
+.ck-skField { height: 52px !important; border-radius: 12px; margin-bottom: 12px; }
+.ck-skSide { display: none; }
+@media (min-width: 1024px) { .ck-skSide { display: flex; flex-direction: column; gap: 12px; padding: 24px; border-radius: 24px; background: #f6f6f6; } }
 .cartapp { background: transparent; }
 .bar.slim { background: transparent; border: 0; padding: 12px 20px; }
 .home { max-width: 460px; margin: 0 auto; padding: 8px 16px 48px; }
@@ -628,9 +640,8 @@ body.has-tabbar .home { padding-bottom: calc(112px + env(safe-area-inset-bottom)
 .h-dside[hidden] { display: none; }
 .cm-root { position: relative; }
 .cm-panel { right: 0; left: auto; }
+/* оформление занимает всю ширину (body.ck-full): своя сетка «Друга клуба», на десктопе форма и итог в две колонки */
 #h-checkout .ck-page { padding: 0; }
-#h-checkout .ck-layout { display: block; }
-#h-checkout .ck-main { max-width: none; width: 100%; }
 .ps-sheet { gap: 12px; }
 .shop .cp-banner { border-radius: 18px; margin-bottom: 12px; }
 .shop .cp-summary { margin: 16px 0 12px; padding: 0 4px; }

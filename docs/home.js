@@ -6,7 +6,7 @@ import { attachHints } from "./hint.js";
 import { computeTasks, lineLabel, personName, rankName } from "./tasks.js";
 import { createShop } from "./shop.js";
 import { createCheckout } from "./checkout.js";
-import { mountCountryMenu } from "./country.js";
+import { loadStores, mountCountryMenu, rememberCountries, setCountry, setStoreSwitcher } from "./country.js";
 import { ensureLayout, mountCartApp } from "./layout-bridge.js";
 
 const P = "/restApi/proxyCC4";
@@ -1075,10 +1075,43 @@ export function createHome(root, api, { onLogout, shopRequest, shopReady, shopCo
   }
 
   /** Каждый кусок экрана рисуется, как только пришёл его ответ: один медленный запрос не прячет остальное. */
+  /* ---------- витрина магазина по флагу ---------- */
+  let stores = {};
+  /** Список витрин и страна текущей сессии: флаг показывает ту витрину, по которой сейчас идут каталог и цены. */
+  async function syncStores() {
+    const [list, sess] = await Promise.all([loadStores(api, P), api(`${P}/auth/session`)]);
+    stores = list;
+    if (Object.keys(list).length) rememberCountries(Object.fromEntries(Object.entries(list).map(([c, v]) => [c, v.name])));
+    const cur = sess.json?.data?.country;
+    if (cur) setCountry(cur);
+  }
+  setStoreSwitcher(async (code) => {
+    const store = stores[code];
+    if (!store) {
+      shop.toast("Для этой страны нет магазина", true);
+      return false;
+    }
+    shop.toast(`Переключаем магазин: ${store.name}…`);
+    const r = await api(`${P}/auth/session`, { method: "PATCH", body: { deliveryId: store.id } });
+    if (!r.ok) {
+      shop.toast(`Не удалось сменить магазин (${r.status || "нет связи"})`, true);
+      return false;
+    }
+    setCountry(code);
+    try {
+      sessionStorage.removeItem("lk_shop_sid"); // сессия магазина в шлюзе открывается заново, уже по новой витрине
+    } catch {
+      /* без хранилища шлюз откроет сессию сам */
+    }
+    location.reload(); // каталог, цены, валюта, корзина и оформление — уже по новой витрине
+    return true;
+  });
+
   async function load() {
     state.ready = true;
     route(); // перерисовать открытую вкладку: до входа магазин не запрашивает данные
     shop.refreshCart();
+    syncStores();
     // пока данные едут, показываем шимер; при повторной загрузке не мигаем уже нарисованным
     if (!state.metricsJson) metricsRoot.innerHTML = skTiles("МОИ ПОКАЗАТЕЛИ", 3, "mcar");
     if (!state.tasks) {
@@ -1167,6 +1200,7 @@ export function createHome(root, api, { onLogout, shopRequest, shopReady, shopCo
     $("#h-structure").hidden = page !== "structure";
     $("#h-profile").hidden = page !== "profile";
     $("#h-checkout").hidden = page !== "checkout";
+    document.body.classList.toggle("ck-full", page === "checkout"); // оформление во всю ширину, без серых полей
     $(".h-back").setAttribute("href", page === "checkout" ? "#/cart" : "#/me");
     $("#h-dtitle").textContent = { bonus: "Coral Кошелёк", transfer: "Трансферный счёт", orders: "История заказов", structure: "Моя структура", profile: "Профиль", checkout: "Оформление заказа" }[page] ?? "";
     if (page === "checkout" && state.ready) checkout.open();

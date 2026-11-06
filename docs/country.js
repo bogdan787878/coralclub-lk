@@ -62,7 +62,32 @@ export function onCountryRequest(fn) {
     if (handler === fn) handler = null;
   };
 }
-export const requestCountry = (code) => (handler ? handler(code) : setCountry(code));
+/**
+ * Смена страны = смена витрины магазина: сессия API кабинета переключается на витрину страны (deliveryId), и
+ * каталог, цены, корзина и оформление идут уже по ней. Кабинет подключает переключатель (setStoreSwitcher);
+ * без него (или пока он не ответил) выбор только запоминается.
+ */
+let switcher = null;
+export const setStoreSwitcher = (fn) => (switcher = fn);
+export async function requestCountry(code) {
+  if (!code || code === country) return;
+  if (switcher && !(await switcher(code))) return; // витрина не переключилась: страну не меняем
+  return handler ? handler(code) : setCountry(code);
+}
+
+/** Витрины магазина по странам из API кабинета (публичный список): { RU: { id: "RUSSIA", name: "Россия" }, … }. */
+export async function loadStores(api, P) {
+  const r = await api(`${P}/country/languages?deliveryId=RUSSIA&language=ru`);
+  const d = r.json?.data ?? {};
+  const out = {};
+  for (const e of [...(d.regionalDelivery ?? []), ...(d.globalDelivery ?? [])]) {
+    if (!e?.country || !e?.id) continue;
+    // у страны может быть две витрины (Беларусь из России и coral-club.by): берём ту, что совпадает с витриной 2.0
+    if (out[e.country] && e.locationCode !== e.country) continue;
+    out[e.country] = { id: e.id, name: String(e.name ?? e.country).trim() };
+  }
+  return out;
+}
 export const onCountryChange = (fn) => {
   listeners.add(fn);
   return () => listeners.delete(fn);
