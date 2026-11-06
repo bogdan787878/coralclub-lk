@@ -38,24 +38,6 @@
 
     <main class="home" id="home"></main>
 
-    <details class="api-details">
-      <summary>Отладка: запросы к API</summary>
-      <section class="wrap">
-        <p><button class="btn ghost small" id="logout-btn" type="button">Выйти из кабинета</button></p>
-        <div class="tools card">
-          <div>
-            <h2>Свой запрос</h2>
-            <form id="custom-form" class="row tight">
-              <select name="method"><option>GET</option><option>POST</option></select>
-              <input name="path" placeholder="/restApi/proxyCC4/…" required />
-              <button class="btn small" type="submit">Отправить</button>
-            </form>
-            <textarea name="body" id="custom-body" rows="2" placeholder="Тело для POST, JSON (необязательно)"></textarea>
-          </div>
-        </div>
-        <div id="results" class="results"></div>
-      </section>
-    </details>
   </div>
 
   <script type="module" src="app.js"></script>

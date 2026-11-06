@@ -143,9 +143,6 @@ pre { margin: 0; font-size: .8rem; white-space: pre-wrap; word-break: break-word
 .sq:disabled { opacity: .45; cursor: default; }
 .sq svg { width: 16px; height: 16px; }
 .desk-hint { max-width: 1100px; margin: 12px auto 0; padding: 0 24px; color: var(--muted); font-size: .85rem; }
-.api-details { max-width: 1100px; margin: 16px auto 0; padding: 0 32px; }
-.api-details > summary { cursor: pointer; font-weight: var(--fw-strong); padding: 12px 0; }
-.api-details .wrap { padding: 0 0 64px; }
 .bind { display: flex; gap: 6px; }
 .bind .tab { font-size: .75rem; }
 

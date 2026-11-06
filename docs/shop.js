@@ -4,6 +4,7 @@
 // Структуры ответов в описании API не заданы, поэтому поля читаются осторожно (см. normalize) и сырой ответ
 // можно посмотреть в консоли: window.__shopDebug.
 import { cartChangedHere } from "./layout-bridge.js";
+import { svg } from "./icons.js";
 
 /** Продукты раздела «Гидратация» российского магазина (coralclub.ru/shop/hydration/). Названия и фото берутся из API;
  *  здесь они запасные, на случай если каталог не ответил. */
@@ -24,13 +25,14 @@ const CATALOG_TABS = [
   { id: "sale", label: "Распродажа" },
 ];
 
+// иконки из общей библиотеки продукта (@coral/icons → icons.js)
 const IC = {
-  heart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.700 3.700 4.500 7 4.500c2 0 3.400 1 5 3 1.600-2 3-3 5-3 3.300 0 5.400 3.200 4.200 6.600-1.700 4.800-9.200 9.400-9.200 9.400z"/></svg>`,
-  plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`,
-  minus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg>`,
-  trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"/></svg>`,
-  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.500l4.500 4.500L19 7.500"/></svg>`,
-  bag: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.500l2.300 10.500h10.400L20.500 7H6.200"/><circle cx="9" cy="19" r="1.400"/><circle cx="17" cy="19" r="1.400"/></svg>`,
+  heart: svg("heart"),
+  plus: svg("plus"),
+  minus: svg("minus"),
+  trash: svg("trash"),
+  check: svg("check"),
+  bag: svg("cart"),
 };
 
 /* ---------- разбор ответов API ---------- */

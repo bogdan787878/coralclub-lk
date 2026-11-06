@@ -4,6 +4,7 @@
 // Магазин принимает методы чек-аута (/sv-api/*) только по своей сессии, поэтому они идут через стенд (npm start):
 // server.mjs, /lk/shop/. Заказ создаётся только по нажатию в окне подтверждения. Оплата картой, как и в «Друге клуба»
 // для РФ и Германии: после заказа прямой переход на страницу банка (шлюз магазина), без промежуточной страницы магазина.
+import { svg } from "./icons.js";
 import { addressSearchEnabled, newSession, resolveAddress, resolveStreet, setPlacesKey, splitStreet, streetLine, suggestAddresses } from "./address.js";
 import { countryName, getCountry, onCountryRequest, rememberCountries, setCountry } from "./country.js";
 import { deliverySlots, isMoscow, slotRegion } from "./slots.js";
@@ -29,7 +30,7 @@ const pick = (o, ...keys) => keys.map((k) => o?.[k]).find((v) => v !== undefined
 const hoursText = (html) => String(html ?? "").replace(/<br\s*\/?>/gi, " · ").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
 const CHECK = `<svg class="oc-check" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="14"/>CHK</svg>`;
 const TICK = `<path d="M8.5 14.5l3.8 3.8 7.2-7.6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`;
-const CHEV = `<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const CHEV = svg("down", { size: 12 });
 
 export function createCheckout(root, { shopRequest, shopReady, shopConfig, shop, who, api, P, money: lkMoney, esc, sheet, toast }) {
   const form = { fio: "", phone: "", email: "", searchText: "", picked: false, manual: false, street: "", build: "", apartment: "", zip: "", city: "", region: "", comment: "", terms: false, data: false };

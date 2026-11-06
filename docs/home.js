@@ -1,5 +1,6 @@
 // Главная в духе банковского приложения: основной счёт, трансферный счёт тегом,
 // быстрые действия и виджеты показателей. Данные из API кабинета (CC4).
+import { svg } from "./icons.js";
 import { metricsMessage, rankRu, renderMetrics } from "./metrics.js";
 import { PRE, RANKS } from "./ranks.js";
 import { attachHints } from "./hint.js";
@@ -12,28 +13,29 @@ import { ensureLayout, mountCartApp } from "./layout-bridge.js";
 const P = "/restApi/proxyCC4";
 const tz = String(new Date().getTimezoneOffset()); // как просит API: минуты смещения, например -180
 
+// иконки из общей библиотеки продукта (@coral/icons → icons.js): те же, что в магазине, Layout и корзине
 const ICON = {
-  tHome: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v8.500a1.500 1.500 0 0 1-1.500 1.500H15v-6H9v6H5.500A1.500 1.500 0 0 1 4 19.500z"/></svg>`,
-  tCat: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h7M3 12h5M3 18h7"/><circle cx="15.500" cy="12" r="4"/><path d="M18.500 15l3 3"/></svg>`,
-  tCart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.500 4H5l2.200 11h11l2-8H6.200"/><circle cx="9" cy="19.500" r="1.300"/><circle cx="17" cy="19.500" r="1.300"/></svg>`,
-  tHeart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.500s-7.500-4.600-9.200-9.400C1.600 7.700 3.700 4.500 7 4.500c2 0 3.400 1 5 3 1.600-2 3-3 5-3 3.300 0 5.400 3.200 4.200 6.600-1.700 4.800-9.200 9.400-9.200 9.400z"/></svg>`,
-  tUser: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4.500 20c.8-3.600 3.700-5.500 7.500-5.500s6.700 1.900 7.500 5.500"/></svg>`,
-  crown: `<svg viewBox="0 0 48 40" fill="currentColor"><path d="M6 12l9 9 9-15 9 15 9-9-4 22H10L6 12z"/></svg>`,
-  points: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>`,
-  bonus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M9 12.5l2 2 4-5"/></svg>`,
-  invite: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="8" r="3.5"/><path d="M3.5 20c.7-3.6 3.2-5.5 6.5-5.5s5.8 1.9 6.5 5.5M19 8v6M16 11h6"/></svg>`,
-  down: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>`,
-  up: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>`,
-  coin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5c0-1 1-1.6 2.5-1.6s2.5.6 2.5 1.6-1 1.4-2.5 1.6-2.5.6-2.5 1.6 1 1.6 2.5 1.6 2.5-.6 2.5-1.6"/></svg>`,
-  bag: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1 12H6L5 8zM9 8a3 3 0 016 0"/></svg>`,
-  truck: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h11v10H3zM14 10h4l3 3v3h-7"/><circle cx="7.5" cy="17.5" r="1.8"/><circle cx="17.5" cy="17.5" r="1.8"/></svg>`,
-  tick: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>`,
-  team: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c.6-3.2 3-4.8 6-4.8s5.4 1.6 6 4.8"/><circle cx="17.5" cy="9" r="2.4"/><path d="M17 14.3c2.2.1 3.7 1.4 4.2 3.7"/></svg>`,
-  next: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>`,
-  card: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18M7 15h3"/></svg>`,
-  doc: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg>`,
-  back: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>`,
-  close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>`,
+  tHome: svg("home"),
+  tCat: svg("catalog"),
+  tCart: svg("cart"),
+  tHeart: svg("heart"),
+  tUser: svg("user"),
+  crown: svg("crown"),
+  points: svg("arrowRight"),
+  bonus: svg("checkCircle"),
+  invite: svg("userPlus"),
+  down: svg("arrowDown"),
+  up: svg("arrowUp"),
+  coin: svg("coins"),
+  bag: svg("bag"),
+  truck: svg("truck"),
+  tick: svg("check"),
+  team: svg("users"),
+  next: svg("next"),
+  card: svg("card"),
+  doc: svg("doc"),
+  back: svg("back"),
+  close: svg("close"),
 };
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -819,8 +821,8 @@ export function createHome(root, api, { onLogout, shopRequest, shopReady, shopCo
   /* ---------- карточка участника: ранг и условия ---------- */
   const numOf = (v) => Number(String(v ?? "").replace(/\s/g, "").replace(",", "."));
   const fmt = (n) => n.toLocaleString("ru-RU", { maximumFractionDigits: 1 });
-  const LOCK = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
-  const CHECK = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`;
+  const LOCK = svg("lock", { size: 22 });
+  const CHECK = svg("check", { size: 22 });
 
   /** Код ранга участника: из отчёта по структуре, иначе из показателей (последний месяц). */
   function rankCodes() {
@@ -838,7 +840,7 @@ export function createHome(root, api, { onLogout, shopRequest, shopReady, shopCo
     return null;
   }
 
-  const INFO = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.8v.1"/></svg>`;
+  const INFO = svg("info", { size: 22 });
 
   /** Условия ранга: что нужно и сколько есть (h = null, если своих цифр нет). */
   function rankRows(r, f) {
