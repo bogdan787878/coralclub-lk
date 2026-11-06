@@ -12,7 +12,7 @@ const BASE = location.hostname.endsWith("github.io") ? "/coralclub" : "https://b
 const SRC = devSrc() ?? `${BASE}/layout/layout.js`;
 const CART_SRC = (devSrc() ?? "").replace(/layout\/layout\.js$/, "cart/cart.js") || `${BASE}/cart/cart.js`;
 // «Главная» — главная участника в интерфейсе «Друга клуба» (страница магазина /coralclub/lk/), остальное — разделы кабинета
-const LINKS = { home: `${BASE}/lk/`, catalog: "#/catalog", cart: "#/cart", fav: "#/fav", me: "#/me" };
+const LINKS = { home: `${BASE}/lk/`, catalog: "#/catalog", cart: "#/cart", fav: "#/fav", me: `${BASE}/lk/me/` }; // профиль перенесён в кабинет на Next
 const CART_LINKS = { checkout: "#/checkout", shop: "#/catalog", login: "./" };
 
 let el = null;
