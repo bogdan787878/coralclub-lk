@@ -11,7 +11,8 @@ const devSrc = () => {
 const BASE = location.hostname.endsWith("github.io") ? "/coralclub" : "https://bogdan787878.github.io/coralclub";
 const SRC = devSrc() ?? `${BASE}/layout/layout.js`;
 const CART_SRC = (devSrc() ?? "").replace(/layout\/layout\.js$/, "cart/cart.js") || `${BASE}/cart/cart.js`;
-const LINKS = { home: "#/", catalog: "#/catalog", cart: "#/cart", fav: "#/fav", me: "#/me" };
+// «Главная» — главная участника в интерфейсе «Друга клуба» (страница магазина /coralclub/lk/), остальное — разделы кабинета
+const LINKS = { home: `${BASE}/lk/`, catalog: "#/catalog", cart: "#/cart", fav: "#/fav", me: "#/me" };
 const CART_LINKS = { checkout: "#/checkout", shop: "#/catalog", login: "./" };
 
 let el = null;
